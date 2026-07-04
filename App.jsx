@@ -109,6 +109,7 @@ const BULK_MATS=["Aggregate","Gravel","GSB","Over Burden (OB)","Earth / Soil","W
 const DEFAULT_WT=["C&G","BT Dismantling","WBM Dismantling","Excavation","Embankment","Construction of Embk from Excavation","Culvert Back Filling-Dust","RE Wall Filling","Median Filling","Slope protection work","Geo Cell Fixing","Coirmat","Vetiver","GSB","WMM","Prime Coat Over Granular Surface","Tack Coat Over Granular Surface","Tack Coat Over Bitumen Surface","DBM","Patch Work","BC","RE Wall Levelling pad & Surface Drain","PCC","RE Panel Casting","RE Panel Erection","Perforated Pipe","Friction Slab With Crash Barrier","Crash Barrier","Friction Slab PCC","Friction Slab Raft","Friction Slab Haunch","Coping Beam","Soil Excavation For Box & V-Drain","Box Drain PCC","Box Drain Raft Concrete","Box Drain Wall Concrete","Box Drain Top Slab Concrete","V - Drain","Kerb","Kerb Rectification","Kerb Precast","Plantation","Diversion","Diversion - Soil","Diversion - GSB","Diversion - WMM","Diversion - DBM","Diversion - BC","Slope protection work (Emb)","Paver Block Erection","MBCB","Misc Works","Sub-Structures","Superstructure","Approach Slab PCC","Approach Slab Crash Barrier","Culvert Excavation","Culvert PCC","Culvert Raft Concrete","Culvert Wall Concrete","Culvert Slab Concrete","Flexible Apron","Parapet","Culvert Foundation","Culvert Sub structure","Culvert Super Structure","MNB Foundation","MNB SubStructure","MNB Super Structure","MNB Girder Erection","MJB PCC","MJB Foundation","MJB Sub structure","MJB Super structure","MJB Girder Casting","Pile Work","MJB Crash Barrier","Geo Composite","Sacrificial Slab Casting","Miscellaneous","Girder Erection","Culvert Box Segment Erection","MJB Work Progress","PVD Installation","Sub Grade","MNB-Backfilling","Cable Erection","HDPE Laying","Primer 1st Coating","Surface Drain Erection","Surface Drain Casting","Light pole Casting","Light Pole Erection","MNB PCC","Back Filling","PVD Filling","Utility"];
 const ROLE_CAPS={engineer:{fill:true,approve:false,download:false,manage:false,settings:false,users:false},incharge:{fill:true,approve:true,download:false,manage:false,settings:false,users:false},management:{fill:false,approve:true,download:true,manage:true,settings:false,users:false},admin:{fill:true,approve:true,download:true,manage:true,settings:true,users:true}};
 const ROLE_LABELS={engineer:"Engineer",incharge:"Incharge",management:"Management",admin:"Admin"};
+const fmtTs=ts=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+", "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true}).toLowerCase();};
 const WEATHER_OPTS=["☀️ Clear","🌤️ Partly Cloudy","☁️ Overcast","🌦️ Light Rain","🌧️ Heavy Rain","🌫️ Fog","🌡️ Extreme Heat"];
 const PROBLEM_OPTS=[
   "✅ No Issues",
@@ -692,8 +693,8 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
   const rolesVal=edits.roles!==undefined?edits.roles:(globalLists.roles||Object.keys(ROLE_CAPS)).join("\n");
   const lockVal=edits.dateLockDays!==undefined?edits.dateLockDays:String(globalLists.dateLockDays??2);
   const starStartVal=edits.starStart!==undefined?edits.starStart:String(globalLists.starStart??5);
-  const lateEngVal=edits.lateEngDeduct!==undefined?edits.lateEngDeduct:String(globalLists.lateEngDeduct??0.25);
-  const lateIcVal=edits.lateInchargeDeduct!==undefined?edits.lateInchargeDeduct:String(globalLists.lateInchargeDeduct??0.1);
+  const lateEngVal=edits.lateEngDeduct!==undefined?edits.lateEngDeduct:String(globalLists.lateEngDeduct??0.5);
+  const lateIcVal=edits.lateInchargeDeduct!==undefined?edits.lateInchargeDeduct:String(globalLists.lateInchargeDeduct??0.25);
   const apvVal=edits.dprApprovalDays!==undefined?edits.dprApprovalDays:String(globalLists.dprApprovalDays??3);
   const otpMobVal=edits.otpMobile!==undefined?edits.otpMobile:(globalLists.otpMobile||"");
   const otpWaVal=edits.otpWhatsapp!==undefined?edits.otpWhatsapp:(globalLists.otpWhatsapp||"");
@@ -753,25 +754,13 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
       .catch(e=>flash("Failed: "+e.message,"err"));
   }
 
-  function saveLock(){
-    const days=parseInt(lockVal);
-    if(isNaN(days)||days<0){flash("Enter 0 (no lock) or a positive number","err");return;}
-    rtdbPut('config/globalLists',{...globalLists,dateLockDays:days})
-      .then(()=>{setGlobalLists(p=>({...p,dateLockDays:days}));flash("✅ Date lock saved — "+(days===0?"No lock":days+" day"+(days===1?"":"s")));})
-      .catch(e=>flash("Failed: "+e.message,"err"));
-  }
-  function savePerformance(){
+  function saveWindowsAndStars(){
+    const apv=parseInt(apvVal), lock=parseInt(lockVal);
     const starStart=parseFloat(starStartVal), engD=parseFloat(lateEngVal), icD=parseFloat(lateIcVal);
-    if([starStart,engD,icD].some(n=>isNaN(n)||n<0)){flash("Enter valid non-negative numbers","err");return;}
-    rtdbPut('config/globalLists',{...globalLists,starStart,lateEngDeduct:engD,lateInchargeDeduct:icD})
-      .then(()=>{setGlobalLists(p=>({...p,starStart,lateEngDeduct:engD,lateInchargeDeduct:icD}));flash("✅ Performance settings saved");})
-      .catch(e=>flash("Failed: "+e.message,"err"));
-  }
-  function saveApprovalWindow(){
-    const days=parseInt(apvVal);
-    if(isNaN(days)||days<0){flash("Enter 0 (no window) or a positive number","err");return;}
-    rtdbPut('config/globalLists',{...globalLists,dprApprovalDays:days})
-      .then(()=>{setGlobalLists(p=>({...p,dprApprovalDays:days}));flash("✅ Approval window saved — "+(days===0?"No limit":days+" day"+(days===1?"":"s")));})
+    if([apv,lock].some(n=>isNaN(n)||n<0)){flash("Enter 0 or a positive number of days","err");return;}
+    if([starStart,engD,icD].some(n=>isNaN(n)||n<0)){flash("Enter valid non-negative star values","err");return;}
+    rtdbPut('config/globalLists',{...globalLists,dprApprovalDays:apv,dateLockDays:lock,starStart,lateEngDeduct:engD,lateInchargeDeduct:icD})
+      .then(()=>{setGlobalLists(p=>({...p,dprApprovalDays:apv,dateLockDays:lock,starStart,lateEngDeduct:engD,lateInchargeDeduct:icD}));flash("✅ Settings saved");})
       .catch(e=>flash("Failed: "+e.message,"err"));
   }
   function saveOtp(){
@@ -819,53 +808,54 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
         </div>
       </Card>
 
-      {/* Date Lock */}
+      {/* Approval windows and star rules */}
       <Card>
-        <div style={{fontWeight:"700",fontSize:"15px",color:NV,marginBottom:"6px"}}>🔒 DPR Date Lock</div>
-        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>Engineers cannot submit DPRs older than this many days. Set to <strong>0</strong> for no lock. Admin is never restricted.</p>
-        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-          <input type="number" min="0" max="30" value={lockVal} onChange={e=>setEdits(p=>({...p,dateLockDays:e.target.value}))}
-            style={{width:"100px",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"16px",fontWeight:"700",textAlign:"center"}}/>
-          <div style={{flex:1,fontSize:"13px",color:"#6b7280"}}>
-            {parseInt(lockVal)===0?"✅ No lock — engineers can enter any date":`Engineers can submit DPRs up to ${lockVal} day${parseInt(lockVal)===1?"":"s"} old`}
-          </div>
-          <button onClick={saveLock} style={{padding:"12px 20px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save</button>
-        </div>
-      </Card>
+        <div style={{fontWeight:"700",fontSize:"15px",color:NV,marginBottom:"4px"}}>⚙️ Approval windows and star rules</div>
+        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"16px",marginTop:0}}>Deadlines for approvals and back-dated DPRs, and how stars are deducted for late work.</p>
 
-      {/* DPR Approval Window */}
-      <Card>
-        <div style={{fontWeight:"700",fontSize:"15px",color:NV,marginBottom:"6px"}}>⏱ DPR Approval Window</div>
-        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>Time limit (in days) for an incharge to approve a DPR. Approving after this is logged in the Audit Log as a backlog approval, with an incharge star penalty. Set <strong>0</strong> for no limit.</p>
-        <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
-          <input type="number" min="0" max="60" value={apvVal} onChange={e=>setEdits(p=>({...p,dprApprovalDays:e.target.value}))}
-            style={{width:"100px",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"16px",fontWeight:"700",textAlign:"center"}}/>
-          <div style={{flex:1,fontSize:"13px",color:"#6b7280"}}>
-            {parseInt(apvVal)===0?"✅ No limit — approvals are never flagged":`Approvals more than ${apvVal} day${parseInt(apvVal)===1?"":"s"} after the DPR date are flagged as backlog`}
+        <div style={{marginBottom:"16px"}}>
+          <div style={{fontWeight:"700",fontSize:"13px",color:"#374151",marginBottom:"4px"}}>⏱ DPR Approval Window</div>
+          <p style={{fontSize:"12px",color:"#6b7280",margin:"0 0 8px"}}>Time limit (in days) for an incharge to approve a DPR. Approving after this is logged as a backlog approval with star penalties.</p>
+          <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
+            <input type="number" min="0" max="60" value={apvVal} onChange={e=>setEdits(p=>({...p,dprApprovalDays:e.target.value}))}
+              style={{width:"100px",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"16px",fontWeight:"700",textAlign:"center"}}/>
+            <span style={{fontSize:"13px",color:"#6b7280",fontWeight:"600"}}>days</span>
           </div>
-          <button onClick={saveApprovalWindow} style={{padding:"12px 20px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save</button>
         </div>
-      </Card>
 
-      {/* Performance & Penalties */}
-      <Card>
-        <div style={{fontWeight:"700",fontSize:"15px",color:NV,marginBottom:"6px"}}>⭐ Performance &amp; Penalties</div>
-        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>Every engineer &amp; incharge starts at the rating below. A late submission deducts stars from both.</p>
-        <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:"12px"}}>
-          <div>
-            <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Starting Stars</label>
-            <input type="number" min="0" max="10" step="0.5" value={starStartVal} onChange={e=>setEdits(p=>({...p,starStart:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"15px",fontWeight:"700",textAlign:"center"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Engineer Penalty</label>
-            <input type="number" min="0" max="5" step="0.05" value={lateEngVal} onChange={e=>setEdits(p=>({...p,lateEngDeduct:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"15px",fontWeight:"700",textAlign:"center"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Incharge Penalty</label>
-            <input type="number" min="0" max="5" step="0.05" value={lateIcVal} onChange={e=>setEdits(p=>({...p,lateInchargeDeduct:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"15px",fontWeight:"700",textAlign:"center"}}/>
+        <div style={{marginBottom:"16px"}}>
+          <div style={{fontWeight:"700",fontSize:"13px",color:"#374151",marginBottom:"4px"}}>🔒 DPR Filling Lock</div>
+          <p style={{fontSize:"12px",color:"#6b7280",margin:"0 0 8px"}}>Engineers can submit a DPR for up to this many days back. Beyond it, they must raise a late-entry request.</p>
+          <div style={{display:"flex",gap:"10px",alignItems:"center"}}>
+            <input type="number" min="0" max="30" value={lockVal} onChange={e=>setEdits(p=>({...p,dateLockDays:e.target.value}))}
+              style={{width:"100px",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"16px",fontWeight:"700",textAlign:"center"}}/>
+            <span style={{fontSize:"13px",color:"#6b7280",fontWeight:"600"}}>days (0 = no lock)</span>
           </div>
         </div>
-        <button onClick={savePerformance} style={{marginTop:"14px",width:"100%",padding:"12px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save Performance Settings</button>
+
+        <div style={{marginBottom:"14px"}}>
+          <div style={{fontWeight:"700",fontSize:"13px",color:"#374151",marginBottom:"4px"}}>⭐ Star Rating Rules</div>
+          <p style={{fontSize:"12px",color:"#6b7280",margin:"0 0 8px"}}>Set the starting score and how many stars a late submission costs.</p>
+          <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:"12px"}}>
+            <div>
+              <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Starting stars</label>
+              <input type="number" min="0" max="10" step="0.5" value={starStartVal} onChange={e=>setEdits(p=>({...p,starStart:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"15px",fontWeight:"700",textAlign:"center"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Engineer penalty</label>
+              <input type="number" min="0" max="5" step="0.05" value={lateEngVal} onChange={e=>setEdits(p=>({...p,lateEngDeduct:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"15px",fontWeight:"700",textAlign:"center"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Incharge penalty</label>
+              <input type="number" min="0" max="5" step="0.05" value={lateIcVal} onChange={e=>setEdits(p=>({...p,lateInchargeDeduct:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"2px solid #d1d5db",fontSize:"15px",fontWeight:"700",textAlign:"center"}}/>
+            </div>
+          </div>
+          <div style={{marginTop:"10px",fontSize:"12px",color:"#6b7280",background:"#f8fafc",borderRadius:"8px",padding:"9px 12px"}}>
+            Example: an engineer who submits {Math.max(1,parseInt(lockVal)||0)} day{(Math.max(1,parseInt(lockVal)||0))===1?"":"s"} late drops from {parseFloat(starStartVal)||0}★ to {(Math.max(0,(parseFloat(starStartVal)||0)-(parseFloat(lateEngVal)||0))).toFixed(2)}★, and their incharge drops by {parseFloat(lateIcVal)||0}★.
+          </div>
+        </div>
+
+        <button onClick={saveWindowsAndStars} style={{width:"100%",padding:"12px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save Settings</button>
       </Card>
 
       {/* Deletion OTP Recipient */}
@@ -935,9 +925,10 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
   const [delCode,setDelCode]=useState("");
   const [delInput,setDelInput]=useState("");
   const [showCreatePreview,setShowCreatePreview]=useState(false);
+  const [previewTab,setPreviewTab]=useState("card");
   const [editDiff,setEditDiff]=useState(null);
   const roleOpts=globalLists?.roles||Object.keys(ROLE_CAPS);
-  const PERMS=[["fill","✏️ Fill DPR"],["approve","✅ Approve"],["download","📥 Download"],["manage","👷 Manage Engs"],["settings","⚙️ Edit Lists"]];
+  const PERMS=[["fill","✏️ Fill DPR"],["approve","✅ Approve"],["download","📥 Download"],["manage","👷 Manage Engineers"],["settings","⚙️ Edit Lists"]];
   const SH2={fontSize:"12px",fontWeight:"700",color:"#6b7280",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"14px",paddingBottom:"10px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"};
 
   function downloadUsersPDF(){
@@ -946,7 +937,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
       const mgmtProjs=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean).map(p=>p.name).join(", ");
       const uc=u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer;
       const perms=PERMS.filter(([k])=>uc[k]).map(([,l])=>l.replace(/[^\w\s]/g,"").trim()).join(", ")||"—";
-      return{name:u.name,role:u.role,pin:u.pin||"—",project:mgmtProjs||(proj?.name||"Not assigned"),perms};
+      return{name:u.name,role:u.role,pin:u.pin||"—",project:u.projectAccess==="all"?"All projects":(mgmtProjs||(proj?.name||"Not assigned")),perms};
     });
     const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>SPL Users List</title>
     <style>
@@ -973,15 +964,18 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     w.document.close();
   }
 
-  function startEdit(u){setEditId(u.id);setEditData({name:u.name,role:u.role,pin:"",assignedProjectId:u.assignedProjectId||"",assignedProjectIds:u.assignedProjectIds||[],caps:u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer});}
+  function startEdit(u){setEditId(u.id);setEditData({name:u.name,role:u.role,pin:"",desc:u.desc||"",projectAccess:u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none"),assignedProjectId:u.assignedProjectId||"",assignedProjectIds:u.assignedProjectIds||[],caps:u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer});}
 
   function saveEdit(u){
     const updated={...editData};
     if(!updated.pin)delete updated.pin;
+    if(updated.projectAccess&&updated.projectAccess!=="specific"){updated.assignedProjectId="";updated.assignedProjectIds=[];}
     const pName=id=>projects.find(p=>p.id===id)?.name||"None";
     const changes=[];
     if(updated.name!==undefined&&updated.name!==u.name)changes.push({f:"Name",from:u.name,to:updated.name});
     if(updated.role!==undefined&&updated.role!==u.role)changes.push({f:"Role",from:u.role,to:updated.role});
+    if(updated.desc!==undefined&&updated.desc!==(u.desc||""))changes.push({f:"Description",from:u.desc||"—",to:updated.desc||"—"});
+    if(updated.projectAccess!==undefined&&updated.projectAccess!==(u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none")))changes.push({f:"Project access",from:u.projectAccess==="all"?"All projects":(u.assignedProjectId||toArr(u.assignedProjectIds).length?"Specific":"None"),to:updated.projectAccess==="all"?"All projects":updated.projectAccess==="specific"?"Specific":"None"});
     if(updated.pin)changes.push({f:"PIN",from:"\u2022\u2022\u2022\u2022",to:"new PIN set"});
     if(updated.phone!==undefined&&updated.phone!==(u.phone||""))changes.push({f:"WhatsApp",from:u.phone||"\u2014",to:updated.phone||"\u2014"});
     if(updated.assignedProjectId!==undefined&&updated.assignedProjectId!==(u.assignedProjectId||""))changes.push({f:"Project",from:pName(u.assignedProjectId),to:pName(updated.assignedProjectId)});
@@ -1030,14 +1024,14 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     rtdbPatch('users/'+u.id,{assignedProjectIds:next}).then(()=>{logUserAudit("transferred",u.name,"Projects: "+(next.map(pid=>projects.find(p=>p.id===pid)?.name||pid).join(", ")||"None"));flash("Project list updated");}).catch(e=>flash(e.message,"err"));
   }
 
-  const projName=u=>{const s=projects.find(p=>p.id===u.assignedProjectId);const m=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);return s?s.name:m.length?m.map(p=>p.name).join(", "):"";};
+  const projName=u=>{if(u.projectAccess==="all")return"All projects";const s=projects.find(p=>p.id===u.assignedProjectId);const m=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);return s?s.name:m.length?m.map(p=>p.name).join(", "):"";};
   const q=search.trim().toLowerCase();
   const filtered=users.filter(u=>{
     if(q&&!((u.name||"").toLowerCase().includes(q)||(u.role||"").toLowerCase().includes(q)||projName(u).toLowerCase().includes(q)))return false;
     if(roleFilter!=="all"&&u.role!==roleFilter)return false;
     if(projFilter!=="all"){
-      if(projFilter==="unassigned"){if(u.assignedProjectId||toArr(u.assignedProjectIds).length)return false;}
-      else{if(u.assignedProjectId!==projFilter&&!toArr(u.assignedProjectIds).includes(projFilter))return false;}
+      if(projFilter==="unassigned"){if(u.projectAccess==="all"||u.assignedProjectId||toArr(u.assignedProjectIds).length)return false;}
+      else{if(u.projectAccess!=="all"&&u.assignedProjectId!==projFilter&&!toArr(u.assignedProjectIds).includes(projFilter))return false;}
     }
     return true;
   });
@@ -1047,8 +1041,8 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     ["admin","management","incharge","engineer"].forEach(r=>{const us=filtered.filter(u=>u.role===r);if(us.length)groups.push({key:r,title:ROLE_LABELS[r]||r,show:true,users:us});});
     const known=["admin","management","incharge","engineer"];const other=filtered.filter(u=>!known.includes(u.role));if(other.length)groups.push({key:"other",title:"Other",show:true,users:other});
   }else{
-    projects.forEach(p=>{const us=filtered.filter(u=>u.assignedProjectId===p.id||toArr(u.assignedProjectIds).includes(p.id));if(us.length)groups.push({key:p.id,title:p.name,show:true,users:us});});
-    const un=filtered.filter(u=>!u.assignedProjectId&&!toArr(u.assignedProjectIds).length);if(un.length)groups.push({key:"un",title:"Unassigned",show:true,users:un});
+    projects.forEach(p=>{const us=filtered.filter(u=>u.projectAccess==="all"||u.assignedProjectId===p.id||toArr(u.assignedProjectIds).includes(p.id));if(us.length)groups.push({key:p.id,title:p.name,show:true,users:us});});
+    const un=filtered.filter(u=>u.projectAccess!=="all"&&!u.assignedProjectId&&!toArr(u.assignedProjectIds).length);if(un.length)groups.push({key:"un",title:"Unassigned",show:true,users:un});
   }
   return(
     <div style={{padding:mobile?"8px":"20px",maxWidth:"960px",margin:"0 auto"}}>
@@ -1067,30 +1061,47 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
             <F lbl="WhatsApp Number (for notifications)"><Inp type="tel" value={newUsr.phone||""} onChange={e=>setNewUsr(p=>({...p,phone:e.target.value}))} placeholder="e.g. 919876543210 (with country code)"/></F>
           )}
         </Grid>
-        {/* Project assignment — always visible, role-aware */}
-        {(newUsr.role==="engineer"||newUsr.role==="incharge")&&(
-          <div style={{marginTop:"12px",padding:"12px",background:"#f0f9ff",borderRadius:"8px",border:"1px solid #bae6fd"}}>
-            <div style={{fontWeight:"700",fontSize:"12px",color:"#0369a1",marginBottom:"8px"}}>📍 Assign to Project <span style={{fontWeight:"400"}}>(one project only)</span></div>
-            <select value={newUsr.assignedProjectId||""} onChange={e=>setNewUsr(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:"8px",border:"1.5px solid #7dd3fc",fontSize:"14px",background:"#fff"}}>
-              <option value="">— No project yet —</option>
-              {projects.map(p=><option key={p.id} value={p.id}>{p.name}{p.code?" ("+p.code+")":""}</option>)}
-            </select>
+        <div style={{marginTop:"12px"}}>
+          <F lbl="Description"><Inp value={newUsr.desc||""} onChange={e=>setNewUsr(p=>({...p,desc:e.target.value}))} placeholder="Role context, division, notes about this user…"/></F>
+        </div>
+        {/* Project Access — None / Specific / All projects */}
+        <div style={{marginTop:"12px",padding:"12px",background:"#f8fafc",borderRadius:"8px",border:"1px solid #e5e7eb"}}>
+          <div style={{fontWeight:"700",fontSize:"12px",color:"#374151",marginBottom:"8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Project Access</div>
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+            {[["none","None"],["specific","Specific"],["all","All projects"]].map(([v,l])=>{
+              const on=(newUsr.projectAccess||"none")===v;
+              return(<button key={v} onClick={()=>setNewUsr(p=>({...p,projectAccess:v,...(v!=="specific"?{assignedProjectId:"",assignedProjectIds:[]}:{})}))} style={{padding:"9px 18px",borderRadius:"8px",border:`2px solid ${on?NV:"#e5e7eb"}`,background:on?"#eff6ff":"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:on?NV:"#6b7280"}}>{l}</button>);
+            })}
           </div>
-        )}
-        {newUsr.role==="management"&&(
-          <div style={{marginTop:"12px",padding:"12px",background:"#f0fdf4",borderRadius:"8px",border:"1px solid #86efac"}}>
-            <div style={{fontWeight:"700",fontSize:"12px",color:"#166534",marginBottom:"8px"}}>📍 Assign to Projects <span style={{fontWeight:"400"}}>(management can have multiple)</span></div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"8px"}}>
-              {projects.map(p=>{
-                const checked=(newUsr.assignedProjectIds||[]).includes(p.id);
-                return(<label key={p.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"7px",border:`1.5px solid ${checked?"#22c55e":"#d1d5db"}`,background:checked?"#f0fdf4":"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>
-                  <input type="checkbox" checked={checked} onChange={e=>{const cur=newUsr.assignedProjectIds||[];const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setNewUsr(pp=>({...pp,assignedProjectIds:next}));}} style={{accentColor:"#22c55e"}}/>
-                  {p.name}
-                </label>);
-              })}
+          {(newUsr.projectAccess||"none")==="none"&&(
+            <div style={{marginTop:"10px",fontSize:"12px",color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"7px",padding:"9px 12px"}}>⚠ This user will be Unassigned and cannot access any project until you assign one.</div>
+          )}
+          {newUsr.projectAccess==="all"&&(
+            <div style={{marginTop:"10px",fontSize:"12px",color:"#166534",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"7px",padding:"9px 12px"}}>✅ This user will have access to all current and future projects.</div>
+          )}
+          {newUsr.projectAccess==="specific"&&((newUsr.role==="engineer"||newUsr.role==="incharge")?(
+            <div style={{marginTop:"10px"}}>
+              <div style={{fontWeight:"700",fontSize:"12px",color:"#0369a1",marginBottom:"8px"}}>📍 Assign to Project <span style={{fontWeight:"400"}}>(one project only)</span></div>
+              <select value={newUsr.assignedProjectId||""} onChange={e=>setNewUsr(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:"8px",border:"1.5px solid #7dd3fc",fontSize:"14px",background:"#fff"}}>
+                <option value="">— No project yet —</option>
+                {projects.map(p=><option key={p.id} value={p.id}>{p.name}{p.code?" ("+p.code+")":""}</option>)}
+              </select>
             </div>
-          </div>
-        )}
+          ):(
+            <div style={{marginTop:"10px"}}>
+              <div style={{fontWeight:"700",fontSize:"12px",color:"#166534",marginBottom:"8px"}}>📍 Assign to Projects <span style={{fontWeight:"400"}}>(can have multiple)</span></div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"8px"}}>
+                {projects.map(p=>{
+                  const checked=(newUsr.assignedProjectIds||[]).includes(p.id);
+                  return(<label key={p.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"7px",border:`1.5px solid ${checked?"#22c55e":"#d1d5db"}`,background:checked?"#f0fdf4":"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>
+                    <input type="checkbox" checked={checked} onChange={e=>{const cur=newUsr.assignedProjectIds||[];const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setNewUsr(pp=>({...pp,assignedProjectIds:next}));}} style={{accentColor:"#22c55e"}}/>
+                    {p.name}
+                  </label>);
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
         {/* Permissions */}
         <div style={{marginTop:"12px",padding:"12px",background:"#f8fafc",borderRadius:"8px",border:"1px solid #e5e7eb"}}>
           <div style={{fontWeight:"700",fontSize:"12px",color:"#374151",marginBottom:"8px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Permissions</div>
@@ -1103,7 +1114,10 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
             ))}
           </div>
         </div>
-        <button onClick={tryCreate} style={{width:"100%",padding:"13px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"15px",fontWeight:"800",marginTop:"14px",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}><i className="ti ti-eye" aria-hidden/>Preview &amp; Create User</button>
+        <div style={{display:"flex",gap:"10px",marginTop:"14px"}}>
+          <button onClick={()=>setNewUsr({name:"",role:"engineer",pin:"",desc:"",projectAccess:"none",assignedProjectId:"",assignedProjectIds:[],caps:{fill:true,approve:false,download:false,manage:false,settings:false}})} style={{padding:"13px 20px",borderRadius:"10px",border:"1.5px solid #d1d5db",background:"#fff",color:"#6b7280",cursor:"pointer",fontSize:"14px",fontWeight:"700"}}>Cancel</button>
+          <button onClick={tryCreate} style={{flex:1,padding:"13px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"15px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}><i className="ti ti-eye" aria-hidden/>Preview &amp; confirm</button>
+        </div>
       </Card>
 
       {/* All Users */}
@@ -1161,14 +1175,16 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                           {roleOpts.map(r=><option key={r}>{r}</option>)}
                         </select>
                       ):<RoleB role={u.role}/>}
-                      {!isEditing&&assignedProj&&<span style={{fontSize:"11px",color:"#6b7280",background:"#f3f4f6",padding:"2px 8px",borderRadius:"6px"}}>📍 {assignedProj.name}</span>}
-                      {!isEditing&&mgmtProjs.length>0&&mgmtProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
-                      {!isEditing&&(u.role==="engineer"||u.role==="incharge")&&!u.assignedProjectId&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
+                      {!isEditing&&u.projectAccess==="all"&&<span style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🌐 All projects</span>}
+                      {!isEditing&&u.projectAccess!=="all"&&assignedProj&&<span style={{fontSize:"11px",color:"#6b7280",background:"#f3f4f6",padding:"2px 8px",borderRadius:"6px"}}>📍 {assignedProj.name}</span>}
+                      {!isEditing&&u.projectAccess!=="all"&&mgmtProjs.length>0&&mgmtProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
+                      {!isEditing&&u.projectAccess!=="all"&&(u.role==="engineer"||u.role==="incharge")&&!u.assignedProjectId&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
                     </div>
+                    {!isEditing&&u.desc&&<div style={{fontSize:"12px",color:"#6b7280",marginTop:"4px"}}>{u.desc}</div>}
                   </div>
                   {!isEditing&&<button onClick={()=>startEdit(u)} style={{padding:"7px 14px",borderRadius:"7px",border:"1px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"600",color:NV}}>✏️ Edit</button>}
                   {isEditing&&<>
-                    <button onClick={()=>saveEdit(u)} style={{padding:"7px 14px",borderRadius:"7px",border:"none",background:GN,color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>💾 Save</button>
+                    <button onClick={()=>saveEdit(u)} style={{padding:"7px 14px",borderRadius:"7px",border:"none",background:GN,color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>👁 Preview changes</button>
                     <button onClick={()=>setEditId(null)} style={{padding:"7px 10px",borderRadius:"7px",border:"1px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:"12px",color:"#6b7280"}}>✕</button>
                   </>}
                   <button onClick={()=>removeUser(u)} style={{padding:"7px 12px",borderRadius:"7px",border:"1px solid #fca5a5",background:"#fef2f2",color:RD,cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>🗑</button>
@@ -1182,14 +1198,31 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                       <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Change PIN <span style={{fontWeight:"400",color:"#9ca3af"}}>(leave blank to keep current)</span></div>
                       <Inp type="password" value={ed.pin||""} onChange={e=>setEditData(p=>({...p,pin:e.target.value}))} placeholder="New PIN (4+ digits)" style={{maxWidth:"200px"}}/>
                     </div>
+                    {/* Description */}
+                    <div style={{marginBottom:"12px"}}>
+                      <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Description</div>
+                      <Inp value={ed.desc!==undefined?ed.desc:u.desc||""} onChange={e=>setEditData(p=>({...p,desc:e.target.value}))} placeholder="Role context, division, notes about this user…"/>
+                    </div>
+                    {/* Project access mode */}
+                    <div style={{marginBottom:"12px"}}>
+                      <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Project Access</div>
+                      <div style={{display:"flex",gap:"7px",flexWrap:"wrap"}}>
+                        {[["none","None"],["specific","Specific"],["all","All projects"]].map(([v,l])=>{
+                          const on=(ed.projectAccess||"none")===v;
+                          return(<button key={v} onClick={()=>setEditData(p=>({...p,projectAccess:v,...(v!=="specific"?{assignedProjectId:"",assignedProjectIds:[]}:{})}))} style={{padding:"7px 15px",borderRadius:"7px",border:`2px solid ${on?NV:"#e5e7eb"}`,background:on?"#eff6ff":"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700",color:on?NV:"#6b7280"}}>{l}</button>);
+                        })}
+                      </div>
+                      {(ed.projectAccess||"none")==="none"&&<div style={{marginTop:"8px",fontSize:"11px",color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"6px",padding:"7px 10px"}}>⚠ This user will be Unassigned and cannot access any project until you assign one.</div>}
+                      {ed.projectAccess==="all"&&<div style={{marginTop:"8px",fontSize:"11px",color:"#166534",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"6px",padding:"7px 10px"}}>✅ This user will have access to all current and future projects.</div>}
+                    </div>
                     {(ed.role||u.role)==="incharge"&&(
                       <div style={{marginBottom:"12px"}}>
                         <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>WhatsApp Number <span style={{fontWeight:"400",color:"#9ca3af"}}>(for DPR notifications)</span></div>
                         <Inp type="tel" value={ed.phone!==undefined?ed.phone:u.phone||""} onChange={e=>setEditData(p=>({...p,phone:e.target.value}))} placeholder="919876543210" style={{maxWidth:"220px"}}/>
                       </div>
                     )}
-                    {/* Project assignment in edit mode */}
-                    {(ed.role||u.role)==="engineer"||(ed.role||u.role)==="incharge"?(
+                    {/* Project assignment in edit mode — only for Specific access */}
+                    {ed.projectAccess!=="specific"?null:(ed.role||u.role)==="engineer"||(ed.role||u.role)==="incharge"?(
                       <div style={{marginBottom:"12px"}}>
                         <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Project</div>
                         <select value={ed.assignedProjectId||""} onChange={e=>setEditData(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:"7px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff"}}>
@@ -1232,6 +1265,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                       <span key={k} style={{fontSize:"11px",padding:"3px 9px",borderRadius:"6px",background:uc[k]?"#eff6ff":"#f3f4f6",color:uc[k]?"#1d4ed8":"#9ca3af",fontWeight:"600"}}>{l}</span>
                     ))}
                     {u.role==="admin"&&<span style={{fontSize:"11px",color:"#9ca3af"}}>Admin has all permissions.</span>}
+                    {u.createdAt&&<span style={{fontSize:"11px",color:"#9ca3af",marginLeft:"auto"}}>🕓 Created {fmtTs(u.createdAt)}</span>}
                   </div>
                 )}
               </div>
@@ -1329,31 +1363,57 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
         const uc=newUsr.caps||ROLE_CAPS[newUsr.role]||ROLE_CAPS.engineer;
         const proj=projects.find(p=>p.id===newUsr.assignedProjectId);
         const mgmt=toArr(newUsr.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);
-        const projLabel=newUsr.role==="management"?(mgmt.length?mgmt.map(p=>p.name).join(", "):"None"):(proj?proj.name:"Not assigned");
+        const access=newUsr.projectAccess||"none";
+        const accessCard=access==="all"?"All projects \u2014 full access":access==="specific"?((mgmt.length?mgmt.map(p=>p.name).join(", "):proj?.name)||"No project selected yet"):"Unassigned \u2014 no access yet";
+        const accessDetail=access==="all"?"All projects":access==="specific"?((mgmt.length?mgmt.map(p=>p.name).join(", "):proj?.name)||"None selected"):"Unassigned (no access)";
+        const grantedPerms=PERMS.filter(([k])=>uc[k]);
+        const nowLabel=fmtTs(new Date().toISOString());
+        const tsLine=(<div style={{marginTop:"14px",paddingTop:"12px",borderTop:"1px dashed #e2e8f0",fontSize:"12px",color:"#6b7280"}}>Created timestamp will be recorded as<br/><strong style={{color:"#374151",fontSize:"13px"}}>{nowLabel}</strong></div>);
         return(
         <div onClick={()=>setShowCreatePreview(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 20px",overflow:"auto",zIndex:2000}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"16px",width:"100%",maxWidth:"460px",overflow:"hidden",boxShadow:"0 30px 60px -20px rgba(0,0,0,.4)"}}>
             <div style={{padding:"16px 20px",background:NV,display:"flex",alignItems:"center",gap:"9px"}}>
               <i className="ti ti-user-check" style={{color:"#fff",fontSize:"18px"}} aria-hidden/>
-              <div style={{color:"#fff",fontWeight:"800",fontSize:"15px"}}>Confirm New User</div>
+              <div style={{color:"#fff",fontWeight:"800",fontSize:"15px",flex:1}}>Confirm New User</div>
+              <div style={{display:"flex",background:"rgba(255,255,255,.15)",borderRadius:"8px",overflow:"hidden"}}>
+                {[["card","Card"],["detail","Detail"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setPreviewTab(v)} style={{padding:"6px 14px",border:"none",cursor:"pointer",fontSize:"12px",fontWeight:"700",background:previewTab===v?"#fff":"transparent",color:previewTab===v?NV:"rgba(255,255,255,.85)"}}>{l}</button>
+                ))}
+              </div>
             </div>
             <div style={{padding:"20px"}}>
-              <div style={{border:"1px solid #e2e8f0",borderRadius:"14px",padding:"18px",background:"#f8fafc"}}>
-                <div style={{display:"flex",gap:"14px",alignItems:"center",marginBottom:"14px"}}>
-                  <Av name={newUsr.name} sz={48}/>
-                  <div><div style={{fontWeight:"800",fontSize:"16px",color:"#111827"}}>{newUsr.name}</div><div style={{marginTop:"3px"}}><RoleB role={newUsr.role}/></div></div>
+              <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"14px"}}>Please review the profile below before it is created.</div>
+              {previewTab==="card"?(
+                <div style={{border:"1px solid #e2e8f0",borderRadius:"14px",padding:"18px",background:"#f8fafc"}}>
+                  <div style={{display:"flex",gap:"14px",alignItems:"center",marginBottom:"12px"}}>
+                    <Av name={newUsr.name} sz={48}/>
+                    <div><div style={{fontWeight:"800",fontSize:"16px",color:"#111827"}}>{newUsr.name}</div><div style={{marginTop:"3px"}}><RoleB role={newUsr.role}/></div></div>
+                  </div>
+                  <div style={{fontSize:"13px",color:newUsr.desc?.trim()?"#374151":"#9ca3af",fontStyle:newUsr.desc?.trim()?"normal":"italic",marginBottom:"10px"}}>{newUsr.desc?.trim()||"No description added"}</div>
+                  <div style={{fontSize:"13px",fontWeight:"600",color:access==="none"?"#92400e":"#166534",marginBottom:"12px"}}>\ud83d\udccd {accessCard}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                    {PERMS.map(([k,l])=>(<span key={k} style={{fontSize:"11px",padding:"3px 9px",borderRadius:"6px",background:uc[k]?"#eff6ff":"#f3f4f6",color:uc[k]?"#1d4ed8":"#9ca3af",fontWeight:"600"}}>{l}</span>))}
+                  </div>
+                  {tsLine}
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"90px 1fr",gap:"7px 12px",fontSize:"13px"}}>
-                  <div style={{color:"#6b7280",fontWeight:"600"}}>PIN</div><div style={{fontFamily:"monospace",fontWeight:"700",color:RD,letterSpacing:"0.1em"}}>{newUsr.pin?"\u2022\u2022\u2022\u2022 set":"\u2014 none"}</div>
-                  <div style={{color:"#6b7280",fontWeight:"600"}}>Project</div><div style={{color:"#374151",fontWeight:"600"}}>{projLabel}</div>
-                  {newUsr.role==="incharge"&&newUsr.phone&&(<><div style={{color:"#6b7280",fontWeight:"600"}}>WhatsApp</div><div style={{color:"#374151",fontWeight:"600"}}>{newUsr.phone}</div></>)}
-                  <div style={{color:"#6b7280",fontWeight:"600"}}>Access</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>{PERMS.filter(([k])=>uc[k]).map(([k,l])=><span key={k} style={{fontSize:"11px",padding:"2px 8px",borderRadius:"6px",background:"#eff6ff",color:"#1d4ed8",fontWeight:"700"}}>{l}</span>)}{PERMS.every(([k])=>!uc[k])&&<span style={{fontSize:"12px",color:"#9ca3af"}}>No permissions</span>}</div>
+              ):(
+                <div style={{border:"1px solid #e2e8f0",borderRadius:"14px",padding:"18px",background:"#f8fafc"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"110px 1fr",gap:"9px 12px",fontSize:"13px"}}>
+                    <div style={{color:"#6b7280",fontWeight:"600"}}>Name</div><div style={{color:"#111827",fontWeight:"700"}}>{newUsr.name}</div>
+                    <div style={{color:"#6b7280",fontWeight:"600"}}>Role</div><div><RoleB role={newUsr.role}/></div>
+                    <div style={{color:"#6b7280",fontWeight:"600"}}>Description</div><div style={{color:newUsr.desc?.trim()?"#374151":"#9ca3af"}}>{newUsr.desc?.trim()||"\u2014"}</div>
+                    <div style={{color:"#6b7280",fontWeight:"600"}}>Project access</div><div style={{color:"#374151",fontWeight:"600"}}>{accessDetail}</div>
+                    {newUsr.role==="incharge"&&newUsr.phone&&(<><div style={{color:"#6b7280",fontWeight:"600"}}>WhatsApp</div><div style={{color:"#374151",fontWeight:"600"}}>{newUsr.phone}</div></>)}
+                    <div style={{color:"#6b7280",fontWeight:"600"}}>Permissions</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>{grantedPerms.map(([k,l])=><span key={k} style={{fontSize:"11px",padding:"2px 8px",borderRadius:"6px",background:"#eff6ff",color:"#1d4ed8",fontWeight:"700"}}>{l}</span>)}{grantedPerms.length===0&&<span style={{fontSize:"12px",color:"#9ca3af"}}>No permissions</span>}</div>
+                    <div style={{color:"#6b7280",fontWeight:"600"}}>PIN</div><div style={{fontFamily:"monospace",fontWeight:"700",color:newUsr.pin?RD:"#9ca3af",letterSpacing:"0.1em"}}>{newUsr.pin?"\u2022\u2022\u2022\u2022 set":"Not set"}</div>
+                  </div>
+                  {tsLine}
                 </div>
-              </div>
+              )}
               <div style={{display:"flex",gap:"10px",marginTop:"18px"}}>
                 <button onClick={()=>setShowCreatePreview(false)} style={{flex:1,padding:"11px",borderRadius:"9px",border:"1.5px solid #d1d5db",background:"#fff",color:"#475569",fontWeight:"700",cursor:"pointer",fontSize:"14px"}}>Back to edit</button>
-                <button onClick={()=>{if(newUsr.name.trim()&&newUsr.pin.trim()){const pn=projects.find(p=>p.id===newUsr.assignedProjectId)?.name;logUserAudit("created",newUsr.name.trim(),"Role: "+newUsr.role+(pn?" \u00b7 Project: "+pn:""));}addUser();setShowCreatePreview(false);}} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:GN,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Confirm &amp; Create</button>
+                <button onClick={()=>{if(newUsr.name.trim()&&newUsr.pin.trim()){const pn=projects.find(p=>p.id===newUsr.assignedProjectId)?.name;logUserAudit("created",newUsr.name.trim(),"Role: "+newUsr.role+(access==="all"?" \u00b7 All projects":pn?" \u00b7 Project: "+pn:""));}addUser();setShowCreatePreview(false);}} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:GN,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Confirm &amp; Create</button>
               </div>
             </div>
           </div>
@@ -1376,7 +1436,7 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
   const isMgmt=user?.role==="management"||(user?.caps?.download&&user?.caps?.manage);
 
   // Filter projects by role - use assignedProjectId (single source of truth)
-  const visibleProjects=(isAdmin||user?.role==="management")?projects:projects.filter(p=>{
+  const visibleProjects=(isAdmin||user?.role==="management"||user?.projectAccess==="all")?projects:projects.filter(p=>{
     if(!user)return false;
     // Incharge: show project they are assigned to
     if(user.role==="incharge") return user.assignedProjectId===p.id;
@@ -1593,6 +1653,7 @@ function AnalyticsScreen({projects,users,mobile,flash}){
   const roleCount=r=>users.filter(u=>u.role===r).length;
   const nEng=roleCount("engineer"),nInc=roleCount("incharge"),nMgmt=roleCount("management"),nAdmin=roleCount("admin");
   const unassigned=users.filter(u=>{
+    if(u.projectAccess==="all")return false;
     if(u.role==="management")return toArr(u.assignedProjectIds).length===0&&!u.assignedProjectId;
     if(u.role==="admin")return false;
     return !u.assignedProjectId;
@@ -1777,7 +1838,7 @@ function PerformanceScreen({users,projects,mobile,globalLists}){
       <div style={{fontWeight:"800",fontSize:mobile?"19px":"22px",color:NV,marginBottom:"3px"}}>⭐ Performance</div>
       <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"16px"}}>Engineer &amp; incharge ratings based on on-time submission</div>
       <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"10px",padding:"13px 16px",marginBottom:"18px",fontSize:"13px",color:"#92400e",lineHeight:"1.5"}}>
-        <i className="ti ti-star-filled" style={{color:"#f59e0b"}} aria-hidden/> Everyone starts at <strong>{starStart}★</strong>. A late submission deducts <strong>{globalLists.lateEngDeduct??0.25}★</strong> from the engineer and <strong>{globalLists.lateInchargeDeduct??0.1}★</strong> from their incharge. Configurable in Settings.
+        <i className="ti ti-star-filled" style={{color:"#f59e0b"}} aria-hidden/> Everyone starts at <strong>{starStart}★</strong>. A late submission deducts <strong>{globalLists.lateEngDeduct??0.5}★</strong> from the engineer and <strong>{globalLists.lateInchargeDeduct??0.25}★</strong> from their incharge. Configurable in Settings.
       </div>
       {loading&&<div style={{fontSize:"13px",color:"#9ca3af",padding:"20px 0"}}>Loading submission history…</div>}
       {!loading&&(
@@ -2158,7 +2219,7 @@ export default function App(){
   const [apvNote,setApvNote]=useState("");
   const [toast,setToast]=useState(null);
   const [newEng,setNewEng]=useState({name:"",dept:"HW - Highway",incharge:INCHARGE_OPTS[0],designation:"Site Engineer"});
-  const [newUsr,setNewUsr]=useState({name:"",role:"engineer",pin:"",assignedProjectId:"",caps:{fill:true,approve:false,download:false,manage:false,settings:false}});
+  const [newUsr,setNewUsr]=useState({name:"",role:"engineer",pin:"",desc:"",projectAccess:"none",assignedProjectId:"",assignedProjectIds:[],caps:{fill:true,approve:false,download:false,manage:false,settings:false}});
   const [wtEdit,setWtEdit]=useState("");
   const [editActIdx,setEditActIdx]=useState(null);
   const [editMatIdx,setEditMatIdx]=useState(null);
@@ -2191,8 +2252,8 @@ export default function App(){
     roles:Object.keys(ROLE_CAPS),
     dateLockDays:2,
     starStart:5,
-    lateEngDeduct:0.25,
-    lateInchargeDeduct:0.1,
+    lateEngDeduct:0.5,
+    lateInchargeDeduct:0.25,
     dprApprovalDays:3,
     otpMobile:"",
     otpWhatsapp:"",
@@ -2706,8 +2767,8 @@ export default function App(){
       // and record it in the Audit Log. If it only made it in because an admin
       // approved a late-entry request, log it as a backlog approval instead.
       if(!isRevisionEdit&&savedDate!==new Date().toISOString().slice(0,10)){
-        const engDeduct=Number(globalLists.lateEngDeduct??0.25);
-        const icDeduct=Number(globalLists.lateInchargeDeduct??0.1);
+        const engDeduct=Number(globalLists.lateEngDeduct??0.5);
+        const icDeduct=Number(globalLists.lateInchargeDeduct??0.25);
         adjustStars(eng,-engDeduct);
         if(hdr.incharge)adjustStars(hdr.incharge,-icDeduct);
         if(viaApprovedRequest){
@@ -2776,7 +2837,7 @@ export default function App(){
     if(subA&&winDays>0&&subA.date){
       const age=Math.floor((Date.now()-new Date(subA.date+"T12:00:00").getTime())/86400000);
       if(age>winDays){
-        const icDeduct=Number(globalLists.lateInchargeDeduct??0.1);
+        const icDeduct=Number(globalLists.lateInchargeDeduct??0.25);
         if(user.role==="incharge")adjustStars(user.name,-icDeduct);
         logAudit({type:'backlog_approved',engName:subA.engineer||'',incharge:subA.incharge||'',approver:user.name,engDeduct:0,icDeduct:user.role==="incharge"?icDeduct:0,detail:'DPR dated '+subA.date+' approved '+age+' days later — outside the '+winDays+'-day approval window',projectId:activeProject.id,projectName:activeProject.name});
       }
@@ -2790,9 +2851,11 @@ export default function App(){
     if(newUsr.pin.length<4){flash("PIN must be 4+ digits","err");return;}
     if(users.find(u=>u.pin===newUsr.pin)){flash("PIN already in use","err");return;}
     const nId2=uid();
-    const newUser={...newUsr,id:nId2,caps:newUsr.caps||ROLE_CAPS[newUsr.role]||ROLE_CAPS.engineer};
+    const access=newUsr.projectAccess||"none";
+    const newUser={...newUsr,id:nId2,desc:(newUsr.desc||"").trim(),projectAccess:access,caps:newUsr.caps||ROLE_CAPS[newUsr.role]||ROLE_CAPS.engineer,createdAt:new Date().toISOString()};
+    if(access!=="specific"){newUser.assignedProjectId="";newUser.assignedProjectIds=[];}
     await rtdbPut('users/'+nId2,newUser).catch(e=>flash('Failed: '+e.message,'err'));
-    setNewUsr({name:"",role:"engineer",pin:"",assignedProjectId:"",caps:{fill:true,approve:false,download:false,manage:false,settings:false}});
+    setNewUsr({name:"",role:"engineer",pin:"",desc:"",projectAccess:"none",assignedProjectId:"",assignedProjectIds:[],caps:{fill:true,approve:false,download:false,manage:false,settings:false}});
     flash("✅ User created");
   }
   async function saveUserCaps(uid_,caps){rtdbPatch('users/'+uid_,{caps}).then(()=>flash("Permissions updated")).catch(e=>flash("Failed: "+e.message,"err"));}
