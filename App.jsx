@@ -1465,16 +1465,18 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
   const otpWhatsapp=(globalLists?.otpWhatsapp||"").trim();
   const otpChannel=globalLists?.otpChannel||"auto";
   const otpTarget=otpChannel==="sms"?(otpMobile?{ch:"SMS",num:otpMobile}:null):otpChannel==="whatsapp"?(otpWhatsapp?{ch:"WhatsApp",num:otpWhatsapp}:null):(otpWhatsapp?{ch:"WhatsApp",num:otpWhatsapp}:otpMobile?{ch:"SMS",num:otpMobile}:null);
+  function sendOtp(p,code){
+    if(!otpTarget)return;
+    const msg="SPL DPR \u2014 deletion code for project \""+p.name+"\": "+code;
+    const num=otpTarget.num.replace(/\D/g,"");
+    if(otpTarget.ch==="WhatsApp")window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg),"_blank");
+    else window.open("sms:"+otpTarget.num+"?&body="+encodeURIComponent(msg),"_blank");
+  }
   function deleteProject(id){
     const p=projects.find(x=>x.id===id);if(!p)return;
     const code=""+Math.floor(100000+Math.random()*900000);
     setDelProj(p);setDelCode(code);setDelInput("");
-    if(otpTarget){
-      const msg="SPL DPR \u2014 deletion code for project \""+p.name+"\": "+code;
-      const num=otpTarget.num.replace(/\D/g,"");
-      if(otpTarget.ch==="WhatsApp")window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg),"_blank");
-      else window.open("sms:"+otpTarget.num+"?&body="+encodeURIComponent(msg),"_blank");
-    }
+    sendOtp(p,code);
   }
   function confirmDeleteProject(){
     if(!delProj)return;
@@ -1604,7 +1606,7 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
             <div style={{padding:"20px"}}>
               <div style={{fontSize:"14px",color:"#374151",marginBottom:"10px"}}>Permanently delete <strong>{delProj.name}</strong> and all DPRs, engineers &amp; data inside it? This cannot be undone.</div>
               {otpTarget?(
-                <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",background:"#f8fafc",borderRadius:"8px",padding:"10px 12px",lineHeight:"1.5"}}><i className="ti ti-send" aria-hidden/> A 6-digit code was sent via <strong>{otpTarget.ch}</strong> to <strong>{otpTarget.num}</strong>. Enter it below to confirm.</div>
+                <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",background:"#f8fafc",borderRadius:"8px",padding:"10px 12px",lineHeight:"1.5"}}><i className="ti ti-send" aria-hidden/> A 6-digit code was sent via <strong>{otpTarget.ch}</strong> to <strong>{otpTarget.num}</strong>. Enter it below to confirm. <button onClick={()=>sendOtp(delProj,delCode)} style={{border:"none",background:"none",color:NV,cursor:"pointer",fontWeight:"700",fontSize:"13px",padding:0,textDecoration:"underline"}}>Resend code</button></div>
               ):(
                 <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px"}}>Type the confirmation code <strong style={{fontFamily:"monospace",fontSize:"17px",color:RD,letterSpacing:"0.18em"}}>{delCode}</strong> below.</div>
               )}
