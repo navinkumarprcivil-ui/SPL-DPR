@@ -2240,6 +2240,8 @@ export default function App(){
   },[]);
 
   // After a user signs in (PIN accepted), surface the install prompt briefly at the top.
+  // Shown to every sign-in (not just once per browser session) since site devices are
+  // often shared between several engineers/incharges through the day.
   useEffect(()=>{
     if(!user)return;
     if(sessionStorage.getItem('splInstallShown')==='1')return;
@@ -2247,13 +2249,14 @@ export default function App(){
     if(isStandalone)return;
     const ua=navigator.userAgent||"";
     const isIOS=/iphone|ipad|ipod/i.test(ua);
-    if(installPrompt||isIOS){
-      setIosInstall(isIOS&&!installPrompt);
-      setShowInstall(true);
-      sessionStorage.setItem('splInstallShown','1');
-      const t=setTimeout(()=>setShowInstall(false),9000); // auto-hide after a few seconds
-      return()=>clearTimeout(t);
-    }
+    // Show for everyone: use the native prompt when the browser has offered one,
+    // iOS-specific instructions on iPhone/iPad, and generic manual instructions
+    // everywhere else (desktop, or a browser that hasn't fired the event yet).
+    setIosInstall(isIOS&&!installPrompt);
+    setShowInstall(true);
+    sessionStorage.setItem('splInstallShown','1');
+    const t=setTimeout(()=>setShowInstall(false),9000); // auto-hide after a few seconds
+    return()=>clearTimeout(t);
   },[user,installPrompt]);
 
   // ── Android / browser Back → step toward home, then press-again-to-exit ──
@@ -2299,15 +2302,17 @@ export default function App(){
   }
 
   // Install banner — slides in at the very top after login, auto-hides after a few seconds.
-  const installBanner=(showInstall&&(installPrompt||iosInstall))?(
+  // Three states: a clickable native prompt (Chrome/Edge/Android), iOS manual steps,
+  // or generic manual steps for any other browser that hasn't offered a native prompt.
+  const installBanner=showInstall?(
     <div style={{position:"fixed",top:0,left:0,right:0,zIndex:100000,display:"flex",justifyContent:"center",padding:"10px",pointerEvents:"none"}}>
       <div style={{pointerEvents:"auto",display:"flex",alignItems:"center",gap:"12px",background:"#fff",border:`1px solid #e5e7eb`,borderLeft:`4px solid ${AM}`,borderRadius:"12px",boxShadow:"0 8px 30px rgba(0,0,0,.18)",padding:"10px 12px 10px 14px",maxWidth:"440px",width:"100%",animation:"none"}}>
         <img src={LOGO} alt="SPL DPR" style={{height:"34px",width:"34px",objectFit:"contain",borderRadius:"8px",background:"#fff",border:"1px solid #eef2f7",flexShrink:0}}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:"13px",fontWeight:"800",color:NV,lineHeight:1.2}}>Install SPL DPR</div>
-          <div style={{fontSize:"11px",color:"#6b7280",fontWeight:"600"}}>{iosInstall?<span>Tap <i className="ti ti-share-2" style={{fontSize:"12px",verticalAlign:"-1px"}} aria-hidden/> Share, then “Add to Home Screen”</span>:"Add to your home screen for quick access"}</div>
+          <div style={{fontSize:"11px",color:"#6b7280",fontWeight:"600"}}>{installPrompt?"Add to your home screen for quick access":iosInstall?<span>Tap <i className="ti ti-share-2" style={{fontSize:"12px",verticalAlign:"-1px"}} aria-hidden/> Share, then “Add to Home Screen”</span>:"Use your browser menu → “Add to Home Screen” / “Install App”"}</div>
         </div>
-        {!iosInstall&&<button onClick={doInstall} style={{flexShrink:0,padding:"9px 15px",borderRadius:"9px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"800",display:"flex",alignItems:"center",gap:"6px"}}>
+        {installPrompt&&<button onClick={doInstall} style={{flexShrink:0,padding:"9px 15px",borderRadius:"9px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"800",display:"flex",alignItems:"center",gap:"6px"}}>
           <i className="ti ti-download" style={{fontSize:"15px"}} aria-hidden/>Install
         </button>}
         <button onClick={()=>setShowInstall(false)} aria-label="Dismiss" style={{flexShrink:0,width:"32px",height:"32px",borderRadius:"8px",border:"none",background:"#f1f5f9",color:"#64748b",cursor:"pointer",fontSize:"15px"}}>
@@ -2775,6 +2780,9 @@ export default function App(){
     setActiveProject(null);
     setView("dashboard");
     setAppView("welcome");
+    // Site devices are often shared between engineers — let the install banner
+    // reappear for whoever signs in next instead of staying suppressed all session.
+    sessionStorage.removeItem('splInstallShown');
   }
 
   // helper: project base path
