@@ -1,0 +1,9 @@
+{
+  "rules": {
+    "//": "Locked down — only Firebase-authenticated (Google sign-in) sessions may read/write. The app's sign-in PIN is an app-level check and is NOT (cannot be) enforced here.",
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "users":    { ".indexOn": ["pin", "role"] },
+    "projects": { ".indexOn": ["id"] }
+  }
+}
