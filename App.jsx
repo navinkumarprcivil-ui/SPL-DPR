@@ -109,6 +109,7 @@ const BULK_MATS=["Aggregate","Gravel","GSB","Over Burden (OB)","Earth / Soil","W
 const DEFAULT_WT=["C&G","BT Dismantling","WBM Dismantling","Excavation","Embankment","Construction of Embk from Excavation","Culvert Back Filling-Dust","RE Wall Filling","Median Filling","Slope protection work","Geo Cell Fixing","Coirmat","Vetiver","GSB","WMM","Prime Coat Over Granular Surface","Tack Coat Over Granular Surface","Tack Coat Over Bitumen Surface","DBM","Patch Work","BC","RE Wall Levelling pad & Surface Drain","PCC","RE Panel Casting","RE Panel Erection","Perforated Pipe","Friction Slab With Crash Barrier","Crash Barrier","Friction Slab PCC","Friction Slab Raft","Friction Slab Haunch","Coping Beam","Soil Excavation For Box & V-Drain","Box Drain PCC","Box Drain Raft Concrete","Box Drain Wall Concrete","Box Drain Top Slab Concrete","V - Drain","Kerb","Kerb Rectification","Kerb Precast","Plantation","Diversion","Diversion - Soil","Diversion - GSB","Diversion - WMM","Diversion - DBM","Diversion - BC","Slope protection work (Emb)","Paver Block Erection","MBCB","Misc Works","Sub-Structures","Superstructure","Approach Slab PCC","Approach Slab Crash Barrier","Culvert Excavation","Culvert PCC","Culvert Raft Concrete","Culvert Wall Concrete","Culvert Slab Concrete","Flexible Apron","Parapet","Culvert Foundation","Culvert Sub structure","Culvert Super Structure","MNB Foundation","MNB SubStructure","MNB Super Structure","MNB Girder Erection","MJB PCC","MJB Foundation","MJB Sub structure","MJB Super structure","MJB Girder Casting","Pile Work","MJB Crash Barrier","Geo Composite","Sacrificial Slab Casting","Miscellaneous","Girder Erection","Culvert Box Segment Erection","MJB Work Progress","PVD Installation","Sub Grade","MNB-Backfilling","Cable Erection","HDPE Laying","Primer 1st Coating","Surface Drain Erection","Surface Drain Casting","Light pole Casting","Light Pole Erection","MNB PCC","Back Filling","PVD Filling","Utility"];
 const ROLE_CAPS={engineer:{fill:true,approve:false,download:false,manage:false,settings:false,users:false},incharge:{fill:true,approve:true,download:false,manage:false,settings:false,users:false},management:{fill:false,approve:true,download:true,manage:true,settings:false,users:false},admin:{fill:true,approve:true,download:true,manage:true,settings:true,users:true}};
 const ROLE_LABELS={engineer:"Engineer",incharge:"Incharge",management:"Management",admin:"Admin"};
+const roleKey=r=>(r||"").trim().toLowerCase();
 const fmtTs=ts=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+", "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true}).toLowerCase();};
 const WEATHER_OPTS=["☀️ Clear","🌤️ Partly Cloudy","☁️ Overcast","🌦️ Light Rain","🌧️ Heavy Rain","🌫️ Fog","🌡️ Extreme Heat"];
 const PROBLEM_OPTS=[
@@ -164,7 +165,7 @@ function Grid({cols,children}){return <div style={{display:"grid",gridTemplateCo
 function initials(n){return(n||"?").split(" ").map(x=>x[0]||"").join("").slice(0,2).toUpperCase();}
 function Av({name,sz}){const s=sz||32;return <div style={{width:s,height:s,borderRadius:"50%",background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.round(s*.34)+"px",fontWeight:"700",color:"#d97706",flexShrink:0}}>{initials(name)}</div>;}
 function DeptB({dept}){if(!dept)return null;const d=dept.toLowerCase();const[bg,fg]=d.includes("hw")?["#dbeafe","#1e40af"]:d.includes("str")?["#ede9fe","#5b21b6"]:d.includes("lay")?["#dcfce7","#166534"]:["#fef9c3","#854d0e"];const s=d.includes("hw")?"HW":d.includes("str")?"STR":d.includes("lay")?"Laying":"BaseCamp";return <span style={{background:bg,color:fg,padding:"3px 8px",borderRadius:"5px",fontSize:"11px",fontWeight:"700"}}>{s}</span>;}
-function RoleB({role}){const m={engineer:["#dbeafe","#1e40af"],incharge:["#dcfce7","#166534"],management:["#ede9fe","#5b21b6"],admin:["#fef9c3","#854d0e"]};const[bg,fg]=m[role]||["#f3f4f6","#374151"];return <span style={{background:bg,color:fg,padding:"3px 8px",borderRadius:"5px",fontSize:"11px",fontWeight:"700"}}>{ROLE_LABELS[role]||role}</span>;}
+function RoleB({role}){const m={engineer:["#dbeafe","#1e40af"],incharge:["#dcfce7","#166534"],management:["#ede9fe","#5b21b6"],admin:["#fef9c3","#854d0e"]};const[bg,fg]=m[roleKey(role)]||["#f3f4f6","#374151"];return <span style={{background:bg,color:fg,padding:"3px 8px",borderRadius:"5px",fontSize:"11px",fontWeight:"700"}}>{ROLE_LABELS[roleKey(role)]||role}</span>;}
 function Pill({label,color,bg}){return <span style={{background:bg||"#f3f4f6",color:color||"#374151",padding:"3px 9px",borderRadius:"5px",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap"}}>{label}</span>;}
 function Card({children,style}){return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"16px",...(style||{})}}>{children}</div>;}
 function SecHead({title,subtitle,color}){return <div style={{fontWeight:"700",fontSize:"13px",color:color||NV,marginBottom:"14px",paddingBottom:"8px",borderBottom:`2px solid ${color||NV}20`}}>{title}{subtitle&&<div style={{fontWeight:"400",fontSize:"11px",color:"#6b7280",marginTop:"2px"}}>{subtitle}</div>}</div>;}
@@ -935,7 +936,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     const rows=users.map(u=>{
       const proj=projects.find(p=>p.id===u.assignedProjectId);
       const mgmtProjs=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean).map(p=>p.name).join(", ");
-      const uc=u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer;
+      const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
       const perms=PERMS.filter(([k])=>uc[k]).map(([,l])=>l.replace(/[^\w\s]/g,"").trim()).join(", ")||"—";
       return{name:u.name,role:u.role,pin:u.pin||"—",project:u.projectAccess==="all"?"All projects":(mgmtProjs||(proj?.name||"Not assigned")),perms};
     });
@@ -964,7 +965,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     w.document.close();
   }
 
-  function startEdit(u){setEditId(u.id);setEditData({name:u.name,role:u.role,pin:"",desc:u.desc||"",projectAccess:u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none"),assignedProjectId:u.assignedProjectId||"",assignedProjectIds:u.assignedProjectIds||[],caps:u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer});}
+  function startEdit(u){setEditId(u.id);setEditData({name:u.name,role:u.role,pin:"",desc:u.desc||"",projectAccess:u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none"),assignedProjectId:u.assignedProjectId||"",assignedProjectIds:u.assignedProjectIds||[],caps:u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer});}
 
   function saveEdit(u){
     const updated={...editData};
@@ -984,7 +985,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
       if(a!==b)changes.push({f:"Projects",from:toArr(u.assignedProjectIds).map(pName).join(", ")||"None",to:toArr(updated.assignedProjectIds).map(pName).join(", ")||"None"});
     }
     if(updated.caps){
-      const oc=u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer;
+      const oc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
       PERMS.forEach(([k,l])=>{if(!!updated.caps[k]!==!!oc[k])changes.push({f:l.replace(/[^\w\s]/g,"").trim(),from:oc[k]?"Allowed":"Denied",to:updated.caps[k]?"Allowed":"Denied"});});
     }
     setEditDiff({u,updated,changes});
@@ -1028,7 +1029,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
   const q=search.trim().toLowerCase();
   const filtered=users.filter(u=>{
     if(q&&!((u.name||"").toLowerCase().includes(q)||(u.role||"").toLowerCase().includes(q)||projName(u).toLowerCase().includes(q)))return false;
-    if(roleFilter!=="all"&&u.role!==roleFilter)return false;
+    if(roleFilter!=="all"&&roleKey(u.role)!==roleKey(roleFilter))return false;
     if(projFilter!=="all"){
       if(projFilter==="unassigned"){if(u.projectAccess==="all"||u.assignedProjectId||toArr(u.assignedProjectIds).length)return false;}
       else{if(u.projectAccess!=="all"&&u.assignedProjectId!==projFilter&&!toArr(u.assignedProjectIds).includes(projFilter))return false;}
@@ -1038,8 +1039,8 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
   let groups=[];
   if(groupBy==="none")groups=[{key:"all",title:"",show:false,users:filtered}];
   else if(groupBy==="role"){
-    ["admin","management","incharge","engineer"].forEach(r=>{const us=filtered.filter(u=>u.role===r);if(us.length)groups.push({key:r,title:ROLE_LABELS[r]||r,show:true,users:us});});
-    const known=["admin","management","incharge","engineer"];const other=filtered.filter(u=>!known.includes(u.role));if(other.length)groups.push({key:"other",title:"Other",show:true,users:other});
+    ["admin","management","incharge","engineer"].forEach(r=>{const us=filtered.filter(u=>roleKey(u.role)===r);if(us.length)groups.push({key:r,title:ROLE_LABELS[roleKey(r)]||r,show:true,users:us});});
+    const known=["admin","management","incharge","engineer"];const other=filtered.filter(u=>!known.includes(roleKey(u.role)));if(other.length)groups.push({key:"other",title:"Other",show:true,users:other});
   }else{
     projects.forEach(p=>{const us=filtered.filter(u=>u.projectAccess==="all"||u.assignedProjectId===p.id||toArr(u.assignedProjectIds).includes(p.id));if(us.length)groups.push({key:p.id,title:p.name,show:true,users:us});});
     const un=filtered.filter(u=>u.projectAccess!=="all"&&!u.assignedProjectId&&!toArr(u.assignedProjectIds).length);if(un.length)groups.push({key:"un",title:"Unassigned",show:true,users:un});
@@ -1052,12 +1053,12 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
         <Grid cols={mobile?"1fr":"1fr 1fr 1fr"}>
           <F lbl="Full Name *"><Inp value={newUsr.name} onChange={e=>setNewUsr(p=>({...p,name:e.target.value}))} placeholder="Name"/></F>
           <F lbl="Role">
-            <select value={newUsr.role} onChange={v=>{const r=v.target.value;setNewUsr(p=>({...p,role:r,caps:ROLE_CAPS[r]||ROLE_CAPS.engineer}));}} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",background:"#fff"}}>
+            <select value={newUsr.role} onChange={v=>{const r=v.target.value;setNewUsr(p=>({...p,role:r,caps:ROLE_CAPS[roleKey(r)]||ROLE_CAPS.engineer}));}} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",background:"#fff"}}>
               {roleOpts.map(r=><option key={r}>{r}</option>)}
             </select>
           </F>
           <F lbl="PIN (4+ digits)"><Inp type="password" value={newUsr.pin} onChange={e=>setNewUsr(p=>({...p,pin:e.target.value}))} placeholder="Set a PIN"/></F>
-          {newUsr.role==="incharge"&&(
+          {roleKey(newUsr.role)==="incharge"&&(
             <F lbl="WhatsApp Number (for notifications)"><Inp type="tel" value={newUsr.phone||""} onChange={e=>setNewUsr(p=>({...p,phone:e.target.value}))} placeholder="e.g. 919876543210 (with country code)"/></F>
           )}
         </Grid>
@@ -1079,7 +1080,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           {newUsr.projectAccess==="all"&&(
             <div style={{marginTop:"10px",fontSize:"12px",color:"#166534",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"7px",padding:"9px 12px"}}>✅ This user will have access to all current and future projects.</div>
           )}
-          {newUsr.projectAccess==="specific"&&((newUsr.role==="engineer"||newUsr.role==="incharge")?(
+          {newUsr.projectAccess==="specific"&&((roleKey(newUsr.role)==="engineer"||roleKey(newUsr.role)==="incharge")?(
             <div style={{marginTop:"10px"}}>
               <div style={{fontWeight:"700",fontSize:"12px",color:"#0369a1",marginBottom:"8px"}}>📍 Assign to Project <span style={{fontWeight:"400"}}>(one project only)</span></div>
               <select value={newUsr.assignedProjectId||""} onChange={e=>setNewUsr(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:"8px",border:"1.5px solid #7dd3fc",fontSize:"14px",background:"#fff"}}>
@@ -1094,7 +1095,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                 {projects.map(p=>{
                   const checked=(newUsr.assignedProjectIds||[]).includes(p.id);
                   return(<label key={p.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"7px",border:`1.5px solid ${checked?"#22c55e":"#d1d5db"}`,background:checked?"#f0fdf4":"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>
-                    <input type="checkbox" checked={checked} onChange={e=>{const cur=newUsr.assignedProjectIds||[];const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setNewUsr(pp=>({...pp,assignedProjectIds:next}));}} style={{accentColor:"#22c55e"}}/>
+                    <input type="checkbox" checked={checked} onChange={e=>{const cur=newUsr.assignedProjectIds||[];const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setNewUsr(pp=>({...pp,assignedProjectIds:next,assignedProjectId:next[0]||""}));}} style={{accentColor:"#22c55e"}}/>
                     {p.name}
                   </label>);
                 })}
@@ -1131,7 +1132,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           </div>
           <select value={roleFilter} onChange={e=>setRoleFilter(e.target.value)} style={{padding:"10px 12px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff",fontWeight:"600",color:"#334155"}}>
             <option value="all">All roles</option>
-            {roleOpts.map(r=><option key={r} value={r}>{ROLE_LABELS[r]||r}</option>)}
+            {roleOpts.map(r=><option key={r} value={r}>{ROLE_LABELS[roleKey(r)]||r}</option>)}
           </select>
           <select value={projFilter} onChange={e=>setProjFilter(e.target.value)} style={{padding:"10px 12px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff",fontWeight:"600",color:"#334155",maxWidth:"180px"}}>
             <option value="all">All projects</option>
@@ -1153,7 +1154,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
               {g.show&&(<div style={{fontSize:"12px",fontWeight:"800",color:NV,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"9px",display:"flex",alignItems:"center",gap:"8px"}}>{g.title}<span style={{background:"#eef2f7",color:"#64748b",padding:"1px 9px",borderRadius:"20px",fontSize:"11px"}}>{g.users.length}</span></div>)}
               <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
           {g.users.map(u=>{
-            const uc=u.caps||ROLE_CAPS[u.role]||ROLE_CAPS.engineer;
+            const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
             const isEditing=editId===u.id;
             const ed=isEditing?editData:{};
             const assignedProj=projects.find(p=>p.id===u.assignedProjectId);
@@ -1171,14 +1172,14 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                     )}
                     <div style={{display:"flex",gap:"6px",marginTop:"3px",flexWrap:"wrap",alignItems:"center"}}>
                       {isEditing?(
-                        <select value={ed.role||u.role} onChange={e=>setEditData(p=>({...p,role:e.target.value,caps:ROLE_CAPS[e.target.value]||ROLE_CAPS.engineer}))} style={{padding:"4px 8px",borderRadius:"6px",border:"1px solid #d1d5db",fontSize:"12px",background:"#fff"}}>
+                        <select value={ed.role||u.role} onChange={e=>setEditData(p=>({...p,role:e.target.value,caps:ROLE_CAPS[roleKey(e.target.value)]||ROLE_CAPS.engineer}))} style={{padding:"4px 8px",borderRadius:"6px",border:"1px solid #d1d5db",fontSize:"12px",background:"#fff"}}>
                           {roleOpts.map(r=><option key={r}>{r}</option>)}
                         </select>
                       ):<RoleB role={u.role}/>}
                       {!isEditing&&u.projectAccess==="all"&&<span style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🌐 All projects</span>}
                       {!isEditing&&u.projectAccess!=="all"&&assignedProj&&<span style={{fontSize:"11px",color:"#6b7280",background:"#f3f4f6",padding:"2px 8px",borderRadius:"6px"}}>📍 {assignedProj.name}</span>}
                       {!isEditing&&u.projectAccess!=="all"&&mgmtProjs.length>0&&mgmtProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
-                      {!isEditing&&u.projectAccess!=="all"&&(u.role==="engineer"||u.role==="incharge")&&!u.assignedProjectId&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
+                      {!isEditing&&u.projectAccess!=="all"&&(roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge")&&!u.assignedProjectId&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
                     </div>
                     {!isEditing&&u.desc&&<div style={{fontSize:"12px",color:"#6b7280",marginTop:"4px"}}>{u.desc}</div>}
                   </div>
@@ -1215,14 +1216,14 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                       {(ed.projectAccess||"none")==="none"&&<div style={{marginTop:"8px",fontSize:"11px",color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"6px",padding:"7px 10px"}}>⚠ This user will be Unassigned and cannot access any project until you assign one.</div>}
                       {ed.projectAccess==="all"&&<div style={{marginTop:"8px",fontSize:"11px",color:"#166534",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"6px",padding:"7px 10px"}}>✅ This user will have access to all current and future projects.</div>}
                     </div>
-                    {(ed.role||u.role)==="incharge"&&(
+                    {roleKey(ed.role||u.role)==="incharge"&&(
                       <div style={{marginBottom:"12px"}}>
                         <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>WhatsApp Number <span style={{fontWeight:"400",color:"#9ca3af"}}>(for DPR notifications)</span></div>
                         <Inp type="tel" value={ed.phone!==undefined?ed.phone:u.phone||""} onChange={e=>setEditData(p=>({...p,phone:e.target.value}))} placeholder="919876543210" style={{maxWidth:"220px"}}/>
                       </div>
                     )}
                     {/* Project assignment in edit mode — only for Specific access */}
-                    {ed.projectAccess!=="specific"?null:(ed.role||u.role)==="engineer"||(ed.role||u.role)==="incharge"?(
+                    {ed.projectAccess!=="specific"?null:(roleKeyroleKey(ed.role||u.role)==="engineer"||roleKeyroleKey(ed.role||u.role)==="incharge")?(
                       <div style={{marginBottom:"12px"}}>
                         <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Project</div>
                         <select value={ed.assignedProjectId||""} onChange={e=>setEditData(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:"7px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff"}}>
@@ -1230,27 +1231,27 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                           {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
-                    ):(ed.role||u.role)==="management"?(
+                    ):(
                       <div style={{marginBottom:"12px"}}>
-                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Projects <span style={{fontWeight:"400",color:"#9ca3af"}}>(management can have multiple)</span></div>
+                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Projects <span style={{fontWeight:"400",color:"#9ca3af"}}>(can have multiple)</span></div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                           {projects.map(p=>{
                             const checked=toArr(ed.assignedProjectIds||u.assignedProjectIds).includes(p.id);
                             return(<label key={p.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"6px 10px",borderRadius:"6px",border:`1.5px solid ${checked?"#22c55e":"#d1d5db"}`,background:checked?"#f0fdf4":"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
-                              <input type="checkbox" checked={checked} onChange={e=>{const cur=toArr(ed.assignedProjectIds||u.assignedProjectIds);const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setEditData(pp=>({...pp,assignedProjectIds:next}));if(e.target.checked&&next.length>1)flash("⚠️ Assigning to "+next.length+" projects","ok");}} style={{accentColor:"#22c55e"}}/>
+                              <input type="checkbox" checked={checked} onChange={e=>{const cur=toArr(ed.assignedProjectIds||u.assignedProjectIds);const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setEditData(pp=>({...pp,assignedProjectIds:next,assignedProjectId:next[0]||""}));if(e.target.checked&&next.length>1)flash("⚠️ Assigning to "+next.length+" projects","ok");}} style={{accentColor:"#22c55e"}}/>
                               {p.name}
                             </label>);
                           })}
                         </div>
                       </div>
-                    ):null}
+                    )}
                     {/* Permissions */}
                     <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Permissions</div>
                     <div style={{display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(5,1fr)",gap:"6px"}}>
                       {PERMS.map(([k,l])=>{
                         const checked=!!(ed.caps||uc)[k];
-                        return(<label key={k} style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 10px",borderRadius:"7px",border:`1.5px solid ${checked?"#3b82f6":"#e5e7eb"}`,background:checked?"#eff6ff":"#fff",cursor:(ed.role||u.role)==="admin"?"default":"pointer",fontSize:"12px",fontWeight:"600",color:checked?"#1d4ed8":"#9ca3af"}}>
-                          <input type="checkbox" checked={checked} disabled={(ed.role||u.role)==="admin"} onChange={e=>setEditData(p=>({...p,caps:{...(p.caps||uc),[k]:e.target.checked}}))} style={{width:"13px",height:"13px",accentColor:"#3b82f6"}}/>
+                        return(<label key={k} style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 10px",borderRadius:"7px",border:`1.5px solid ${checked?"#3b82f6":"#e5e7eb"}`,background:checked?"#eff6ff":"#fff",cursor:roleKey(ed.role||u.role)==="admin"?"default":"pointer",fontSize:"12px",fontWeight:"600",color:checked?"#1d4ed8":"#9ca3af"}}>
+                          <input type="checkbox" checked={checked} disabled={roleKey(ed.role||u.role)==="admin"} onChange={e=>setEditData(p=>({...p,caps:{...(p.caps||uc),[k]:e.target.checked}}))} style={{width:"13px",height:"13px",accentColor:"#3b82f6"}}/>
                           {l}
                         </label>);
                       })}
@@ -1264,7 +1265,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                     {PERMS.map(([k,l])=>(
                       <span key={k} style={{fontSize:"11px",padding:"3px 9px",borderRadius:"6px",background:uc[k]?"#eff6ff":"#f3f4f6",color:uc[k]?"#1d4ed8":"#9ca3af",fontWeight:"600"}}>{l}</span>
                     ))}
-                    {u.role==="admin"&&<span style={{fontSize:"11px",color:"#9ca3af"}}>Admin has all permissions.</span>}
+                    {roleKey(u.role)==="admin"&&<span style={{fontSize:"11px",color:"#9ca3af"}}>Admin has all permissions.</span>}
                     {u.createdAt&&<span style={{fontSize:"11px",color:"#9ca3af",marginLeft:"auto"}}>🕓 Created {fmtTs(u.createdAt)}</span>}
                   </div>
                 )}
@@ -1360,7 +1361,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
 
       {/* Create preview / confirm */}
       {showCreatePreview&&(()=>{
-        const uc=newUsr.caps||ROLE_CAPS[newUsr.role]||ROLE_CAPS.engineer;
+        const uc=newUsr.caps||ROLE_CAPS[roleKey(newUsr.role)]||ROLE_CAPS.engineer;
         const proj=projects.find(p=>p.id===newUsr.assignedProjectId);
         const mgmt=toArr(newUsr.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);
         const access=newUsr.projectAccess||"none";
@@ -1403,7 +1404,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                     <div style={{color:"#6b7280",fontWeight:"600"}}>Role</div><div><RoleB role={newUsr.role}/></div>
                     <div style={{color:"#6b7280",fontWeight:"600"}}>Description</div><div style={{color:newUsr.desc?.trim()?"#374151":"#9ca3af"}}>{newUsr.desc?.trim()||"\u2014"}</div>
                     <div style={{color:"#6b7280",fontWeight:"600"}}>Project access</div><div style={{color:"#374151",fontWeight:"600"}}>{accessDetail}</div>
-                    {newUsr.role==="incharge"&&newUsr.phone&&(<><div style={{color:"#6b7280",fontWeight:"600"}}>WhatsApp</div><div style={{color:"#374151",fontWeight:"600"}}>{newUsr.phone}</div></>)}
+                    {roleKey(newUsr.role)==="incharge"&&newUsr.phone&&(<><div style={{color:"#6b7280",fontWeight:"600"}}>WhatsApp</div><div style={{color:"#374151",fontWeight:"600"}}>{newUsr.phone}</div></>)}
                     <div style={{color:"#6b7280",fontWeight:"600"}}>Permissions</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>{grantedPerms.map(([k,l])=><span key={k} style={{fontSize:"11px",padding:"2px 8px",borderRadius:"6px",background:"#eff6ff",color:"#1d4ed8",fontWeight:"700"}}>{l}</span>)}{grantedPerms.length===0&&<span style={{fontSize:"12px",color:"#9ca3af"}}>No permissions</span>}</div>
                     <div style={{color:"#6b7280",fontWeight:"600"}}>PIN</div><div style={{fontFamily:"monospace",fontWeight:"700",color:newUsr.pin?RD:"#9ca3af",letterSpacing:"0.1em"}}>{newUsr.pin?"\u2022\u2022\u2022\u2022 set":"Not set"}</div>
@@ -1432,14 +1433,14 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
   const [editData,setEditData]=useState({});
   const [assignId,setAssignId]=useState(null); // project being assigned
   const mobile=useMobile();
-  const isAdmin=user?.role==="admin";
-  const isMgmt=user?.role==="management"||(user?.caps?.download&&user?.caps?.manage);
+  const isAdmin=roleKey(user?.role)==="admin";
+  const isMgmt=roleKey(user?.role)==="management"||(user?.caps?.download&&user?.caps?.manage);
 
   // Filter projects by role - use assignedProjectId (single source of truth)
-  const visibleProjects=(isAdmin||user?.role==="management"||user?.projectAccess==="all")?projects:projects.filter(p=>{
+  const visibleProjects=(isAdmin||roleKey(user?.role)==="management"||user?.projectAccess==="all")?projects:projects.filter(p=>{
     if(!user)return false;
     // Incharge: show project they are assigned to
-    if(user.role==="incharge") return user.assignedProjectId===p.id;
+    if(roleKey(user.role)==="incharge") return user.assignedProjectId===p.id;
     return false;
   });
 
@@ -1491,7 +1492,7 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
       .catch(e=>flash(e.message,"err"));
   }
 
-  const assignableUsers=users.filter(u=>u.role==="incharge"||u.role==="management");
+  const assignableUsers=users.filter(u=>roleKey(u.role)==="incharge"||roleKey(u.role)==="management");
 
   return(
     <div style={{padding:mobile?"12px":"20px",maxWidth:"1300px",margin:"0 auto"}}>
@@ -1528,8 +1529,8 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
       <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":projects.length===1?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:"16px"}}>
         {visibleProjects.map(p=>{
           const isEdit=editId===p.id;
-          const projIncharges=users.filter(u=>u.role==="incharge"&&u.assignedProjectId===p.id);
-          const projEngineers=users.filter(u=>u.role==="engineer"&&u.assignedProjectId===p.id);
+          const projIncharges=users.filter(u=>roleKey(u.role)==="incharge"&&u.assignedProjectId===p.id);
+          const projEngineers=users.filter(u=>roleKey(u.role)==="engineer"&&u.assignedProjectId===p.id);
           return(
             <div key={p.id} style={{background:"#fff",borderRadius:"14px",border:`2px solid ${NV}20`,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
               <div style={{background:`linear-gradient(135deg,${NV},#2d5a9e)`,padding:"20px 20px 16px",color:"#fff"}}>
@@ -1650,16 +1651,16 @@ function AnalyticsScreen({projects,users,mobile,flash}){
   useEffect(()=>{ load(); /* eslint-disable-next-line */ },[projects.length]);
 
   // ── Aggregate ──
-  const roleCount=r=>users.filter(u=>u.role===r).length;
+  const roleCount=r=>users.filter(u=>roleKey(u.role)===r).length;
   const nEng=roleCount("engineer"),nInc=roleCount("incharge"),nMgmt=roleCount("management"),nAdmin=roleCount("admin");
   const unassigned=users.filter(u=>{
     if(u.projectAccess==="all")return false;
-    if(u.role==="management")return toArr(u.assignedProjectIds).length===0&&!u.assignedProjectId;
-    if(u.role==="admin")return false;
+    if(roleKey(u.role)==="management")return toArr(u.assignedProjectIds).length===0&&!u.assignedProjectId;
+    if(roleKey(u.role)==="admin")return false;
     return !u.assignedProjectId;
   });
-  const projIncharges=p=>users.filter(u=>u.role==="incharge"&&u.assignedProjectId===p.id);
-  const projEngineers=p=>users.filter(u=>u.role==="engineer"&&u.assignedProjectId===p.id);
+  const projIncharges=p=>users.filter(u=>roleKey(u.role)==="incharge"&&u.assignedProjectId===p.id);
+  const projEngineers=p=>users.filter(u=>roleKey(u.role)==="engineer"&&u.assignedProjectId===p.id);
 
   const pd=pdata||{};
   const totalDPRs=Object.values(pd).reduce((a,x)=>a+(x.count||0),0);
@@ -1827,8 +1828,8 @@ function PerformanceScreen({users,projects,mobile,globalLists}){
   const starStart=Number(globalLists.starStart??5);
   const subs=allSubs||[];
   const isLateSub=s=>s.date!==((s.submittedAt||"").slice(0,10)||s.date);
-  const people=users.filter(u=>u.role==="engineer"||u.role==="incharge").map(u=>{
-    const mine=u.role==="engineer"?subs.filter(s=>s.engineer===u.name):subs.filter(s=>s.incharge===u.name);
+  const people=users.filter(u=>roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge").map(u=>{
+    const mine=roleKey(u.role)==="engineer"?subs.filter(s=>s.engineer===u.name):subs.filter(s=>s.incharge===u.name);
     const late=mine.filter(isLateSub).length;
     return{ id:u.id, name:u.name, role:u.role, stars:u.stars!=null?Number(u.stars):starStart, subs:mine.length, late, ontime:mine.length-late };
   }).sort((a,b)=>b.stars-a.stars);
@@ -1963,7 +1964,7 @@ function ReportsScreen({projects,users,mobile,flash}){
 
   const subs=allSubs||[];
   const inRange=subs.filter(s=>s.date>=from&&s.date<=to);
-  const engRoster=users.filter(u=>u.role==="engineer");
+  const engRoster=users.filter(u=>roleKey(u.role)==="engineer");
 
   const lastFieldFor=(name,field)=>{ const ss=inRange.filter(s=>s.engineer===name); return ss.length?ss[ss.length-1][field]||"":""; };
   const engRows=engRoster.map(u=>{
@@ -2316,10 +2317,10 @@ export default function App(){
       let atHome=false;
       if(st.activeProject&&st.view!=="dashboard"){ setView("dashboard"); }
       else if(st.activeProject){ // already on the in-project dashboard
-        if(u&&(u.role==="admin"||u.role==="management")){ setActiveProject(null); setView("dashboard"); setAppView(u.role==="admin"?"globalAdmin":"projects"); }
+        if(u&&(roleKey(u.role)==="admin"||roleKey(u.role)==="management")){ setActiveProject(null); setView("dashboard"); setAppView(roleKey(u.role)==="admin"?"globalAdmin":"projects"); }
         else atHome=true; // engineer / incharge: dashboard is home
       } else {
-        const home=(u&&u.role==="admin")?"globalAdmin":"projects";
+        const home=(u&&roleKey(u.role)==="admin")?"globalAdmin":"projects";
         if(st.appView!==home){ setAppView(home); }
         else atHome=true;
       }
@@ -2392,7 +2393,7 @@ export default function App(){
 
   // Auto-fill incharge and dept when engineers data loads (handles race condition)
   useEffect(()=>{
-    if(view==="form"&&user?.role==="engineer"&&engineers.length>0){
+    if(view==="form"&&roleKey(user?.role)==="engineer"&&engineers.length>0){
       if(!hdr.incharge||!hdr.dept){
         const engRec=engineers.find(x=>
           x.id===user.id||
@@ -2594,7 +2595,7 @@ export default function App(){
     return()=>_unsubs.forEach(fn=>fn());
   },[activeProject]);
 
-  const caps=user?(user.caps||ROLE_CAPS[user.role]||ROLE_CAPS.engineer):ROLE_CAPS.engineer;
+  const caps=user?(user.caps||ROLE_CAPS[roleKey(user.role)]||ROLE_CAPS.engineer):ROLE_CAPS.engineer;
   if(loading)return <div style={{padding:"5rem",textAlign:"center",color:"#6b7280",fontFamily:"sans-serif",fontSize:"16px"}}>Loading…</div>;
 
   // ── GOOGLE SIGN-IN GATE ──────────────────────────────────────────────
@@ -2673,7 +2674,7 @@ export default function App(){
       }
     }catch(e){}
     // Fresh form — pre-fill from engineer record
-    if(user?.role==="engineer"){
+    if(roleKey(user?.role)==="engineer"){
       // Match by user.id (primary key), name, or name trimmed+lowercase
       const engRec=engineers.find(x=>
         x.id===user.id ||
@@ -2702,7 +2703,7 @@ export default function App(){
   }
 
   function submitDPR(){
-    const eng=user?.role==="engineer"?user.name:(hdr.engineer==="__other"?(hdr.engCustom||"").trim():hdr.engineer);
+    const eng=roleKey(user?.role)==="engineer"?user.name:(hdr.engineer==="__other"?(hdr.engCustom||"").trim():hdr.engineer);
     if(!eng){ flash("Please select your name","err"); return; }
     if(acts.length===0&&matTxs.length===0){ flash("Add at least one work activity or material entry","err"); return; }
     if(!hdr.incharge){if(!window.confirm("⚠️ No Incharge assigned.\n\nProceed anyway?"))return;}
@@ -2710,7 +2711,7 @@ export default function App(){
     // late-entry request to submit past the lock window; admin is never restricted.
     const maxDays=globalLists.dateLockDays!=null?Number(globalLists.dateLockDays):2;
     let viaApprovedRequest=null;
-    if(maxDays>0&&user?.role!=="admin"){
+    if(maxDays>0&&roleKey(user?.role)!=="admin"){
       const daysAgo=Math.floor((new Date()-new Date(hdr.date+"T12:00:00"))/86400000);
       if(daysAgo>maxDays){
         viaApprovedRequest=lateRequests.find(r=>r.status==="approved"&&r.projectId===activeProject.id&&r.engName===eng&&r.date===hdr.date);
@@ -2793,7 +2794,7 @@ export default function App(){
     });
   }
 
-  function canApprove(s){if(!user)return false;if(user.role==="admin"||user.role==="management")return true;if(user.role==="incharge"){const e=engineers.find(x=>x.name===s.engineer);return e&&e.incharge===user.name;}return false;}
+  function canApprove(s){if(!user)return false;if(roleKey(user.role)==="admin"||roleKey(user.role)==="management")return true;if(roleKey(user.role)==="incharge"){const e=engineers.find(x=>x.name===s.engineer);return e&&e.incharge===user.name;}return false;}
 
   // Reassign user to a new project — single source of truth: user.assignedProjectId
   function reassignUser(u,newPid){
@@ -2838,12 +2839,12 @@ export default function App(){
       const age=Math.floor((Date.now()-new Date(subA.date+"T12:00:00").getTime())/86400000);
       if(age>winDays){
         const icDeduct=Number(globalLists.lateInchargeDeduct??0.25);
-        if(user.role==="incharge")adjustStars(user.name,-icDeduct);
-        logAudit({type:'backlog_approved',engName:subA.engineer||'',incharge:subA.incharge||'',approver:user.name,engDeduct:0,icDeduct:user.role==="incharge"?icDeduct:0,detail:'DPR dated '+subA.date+' approved '+age+' days later — outside the '+winDays+'-day approval window',projectId:activeProject.id,projectName:activeProject.name});
+        if(roleKey(user.role)==="incharge")adjustStars(user.name,-icDeduct);
+        logAudit({type:'backlog_approved',engName:subA.engineer||'',incharge:subA.incharge||'',approver:user.name,engDeduct:0,icDeduct:roleKey(user.role)==="incharge"?icDeduct:0,detail:'DPR dated '+subA.date+' approved '+age+' days later — outside the '+winDays+'-day approval window',projectId:activeProject.id,projectName:activeProject.name});
       }
     }
     flash("✅ Approved by "+user.name);rtdbPatch(pb()+'/submissions/'+id,{approved:true,approvedBy:user.name,approvedRole:user.role,approvedAt:new Date().toISOString(),approvalNote:apvNote}).catch(e=>flash('Approve write failed: '+e.message,'err'));}
-  async function deleteSub(id){if(!user||user.role!=='admin'||!pb())return;if(!window.confirm('Delete this DPR permanently? This cannot be undone.'))return;rtdbDelete(pb()+'/submissions/'+id).then(()=>flash('🗑 DPR deleted')).catch(e=>flash('Delete failed: '+e.message,'err'));}
+  async function deleteSub(id){if(!user||roleKey(user.role)!=='admin'||!pb())return;if(!window.confirm('Delete this DPR permanently? This cannot be undone.'))return;rtdbDelete(pb()+'/submissions/'+id).then(()=>flash('🗑 DPR deleted')).catch(e=>flash('Delete failed: '+e.message,'err'));}
   async function addEngineer(){if(!newEng.name.trim()){flash('Enter name','err');return;}if(!pb())return;const nId=uid();rtdbPut(pb()+'/engineers/'+nId,{...newEng,id:nId}).then(()=>flash('Engineer added')).catch(e=>flash('Failed: '+e.message,'err'));setNewEng({name:'',dept:'HW - Highway',incharge:lists.incharge?.[0]||INCHARGE_OPTS[0],designation:"Site Engineer"});}
   async function saveEngEdit(id,u){if(!pb())return;rtdbPatch(pb()+'/engineers/'+id,u).then(()=>flash('Saved')).catch(e=>flash('Failed: '+e.message,'err'));}
   async function addUser(){
@@ -2852,7 +2853,7 @@ export default function App(){
     if(users.find(u=>u.pin===newUsr.pin)){flash("PIN already in use","err");return;}
     const nId2=uid();
     const access=newUsr.projectAccess||"none";
-    const newUser={...newUsr,id:nId2,desc:(newUsr.desc||"").trim(),projectAccess:access,caps:newUsr.caps||ROLE_CAPS[newUsr.role]||ROLE_CAPS.engineer,createdAt:new Date().toISOString()};
+    const newUser={...newUsr,id:nId2,desc:(newUsr.desc||"").trim(),projectAccess:access,caps:newUsr.caps||ROLE_CAPS[roleKey(newUsr.role)]||ROLE_CAPS.engineer,createdAt:new Date().toISOString()};
     if(access!=="specific"){newUser.assignedProjectId="";newUser.assignedProjectIds=[];}
     await rtdbPut('users/'+nId2,newUser).catch(e=>flash('Failed: '+e.message,'err'));
     setNewUsr({name:"",role:"engineer",pin:"",desc:"",projectAccess:"none",assignedProjectId:"",assignedProjectIds:[],caps:{fill:true,approve:false,download:false,manage:false,settings:false}});
@@ -2907,8 +2908,8 @@ export default function App(){
   const pendN=(()=>{
     const allPending=subs.filter(s=>!s.approved&&!s.needsRevision);
     if(!user)return 0;
-    if(user.role==="admin"||user.role==="management")return allPending.length;
-    if(user.role==="incharge"){
+    if(roleKey(user.role)==="admin"||roleKey(user.role)==="management")return allPending.length;
+    if(roleKey(user.role)==="incharge"){
       const myEngs=engineers.filter(e=>e.incharge===user.name).map(e=>e.name);
       return allPending.filter(s=>myEngs.includes(s.engineer)).length;
     }
@@ -2919,8 +2920,8 @@ export default function App(){
   function getReportSubs(){
     const base=subs.filter(s=>s.date>=reportFrom&&s.date<=reportTo);
     if(!user)return base;
-    if(user.role==="engineer") return base.filter(s=>s.engineer===user.name);
-    if(user.role==="incharge"){
+    if(roleKey(user.role)==="engineer") return base.filter(s=>s.engineer===user.name);
+    if(roleKey(user.role)==="incharge"){
       const myEngs=engineers.filter(e=>e.incharge===user.name).map(e=>e.name);
       return base.filter(s=>myEngs.includes(s.engineer));
     }
@@ -2931,9 +2932,9 @@ export default function App(){
   const apvS=subs.filter(s=>s.date===apvDate);
 
   // Revision submissions this engineer needs to fix
-  const myRevisions=user?.role==="engineer"?subs.filter(s=>s.engineer===user.name&&s.needsRevision&&!s.approved):[];
+  const myRevisions=roleKey(user?.role)==="engineer"?subs.filter(s=>s.engineer===user.name&&s.needsRevision&&!s.approved):[];
   // This engineer's own late-entry requests (so they know their status)
-  const myLateRequests=user?.role==="engineer"?lateRequests.filter(r=>r.engName===user.name&&r.projectId===activeProject?.id).sort((a,b)=>(b.requestedAt||"").localeCompare(a.requestedAt||"")):[];
+  const myLateRequests=roleKey(user?.role)==="engineer"?lateRequests.filter(r=>r.engName===user.name&&r.projectId===activeProject?.id).sort((a,b)=>(b.requestedAt||"").localeCompare(a.requestedAt||"")):[];
 
   // TABS — filter by role caps
   const allTabs=[
@@ -3035,7 +3036,7 @@ export default function App(){
               );})}
             </div>
             <div style={{padding:"12px",borderTop:"1px solid rgba(255,255,255,.1)",display:"flex",flexDirection:"column",gap:"8px"}}>
-              {user?.role==="admin"&&<button onClick={async()=>{
+              {roleKey(user?.role)==="admin"&&<button onClick={async()=>{
                 try{flash("⏳ Fetching backup...");
                   const r=await fetch(await authedUrl(RTDB_URL+'/.json'));if(!r.ok)throw new Error('HTTP '+r.status);
                   const data=await r.json();
@@ -3049,7 +3050,7 @@ export default function App(){
               </button>}
               <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
                 <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"800",color:"#92400e",flexShrink:0}}>{initials(user?.name)}</div>
-                <div style={{flex:1,minWidth:0,lineHeight:"1.25"}}><div style={{fontSize:"12px",fontWeight:"700",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.name}</div><div style={{fontSize:"10px",color:"rgba(255,255,255,.5)"}}>{ROLE_LABELS[user?.role]||user?.role}</div></div>
+                <div style={{flex:1,minWidth:0,lineHeight:"1.25"}}><div style={{fontSize:"12px",fontWeight:"700",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.name}</div><div style={{fontSize:"10px",color:"rgba(255,255,255,.5)"}}>{ROLE_LABELS[roleKey(user?.role)]||user?.role}</div></div>
                 <button onClick={handleSignOut} title="Sign out" style={{border:"none",background:"rgba(255,255,255,.08)",color:"#cbd5e1",width:"30px",height:"30px",borderRadius:"8px",cursor:"pointer",fontSize:"14px",flexShrink:0}}><i className="ti ti-logout" aria-hidden/></button>
               </div>
               <div style={{fontSize:"9px",color:"rgba(255,255,255,.3)",textAlign:"center",marginTop:"9px",letterSpacing:".02em"}}>{BUILD_TAG}</div>
@@ -3067,7 +3068,7 @@ export default function App(){
             <div style={{fontWeight:"700",fontSize:"14px",color:"#fff"}}>{ADMIN_TABS.find(t=>t.v===effectiveView)?.l||"Admin"}</div>
             <div style={{fontSize:"10px",color:"rgba(255,255,255,.6)"}}>Admin Panel</div>
           </div>}
-          {mobile&&user?.role==="admin"&&<button onClick={async()=>{
+          {mobile&&roleKey(user?.role)==="admin"&&<button onClick={async()=>{
             try{flash("⏳ Fetching backup...");
               const r=await fetch(await authedUrl(RTDB_URL+'/.json'));if(!r.ok)throw new Error('HTTP '+r.status);
               const data=await r.json();
@@ -3187,11 +3188,11 @@ export default function App(){
             <div><div style={{fontWeight:"800",fontSize:"14px",color:"#fff"}}>SPL DPR</div><div style={{fontSize:"10px",color:"rgba(255,255,255,.55)"}}>Project workspace</div></div>
           </div>
           <button onClick={()=>safeNav(()=>{
-            if(user?.role==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
-            else if(user?.role==="management"){setActiveProject(null);setView("dashboard");setAppView("projects");}
+            if(roleKey(user?.role)==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
+            else if(roleKey(user?.role)==="management"){setActiveProject(null);setView("dashboard");setAppView("projects");}
             else{handleSignOut();} // engineers/incharges: sign out instead of showing wrong screen
           })} style={{margin:"0 12px 10px",padding:"9px 11px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.2)",background:"transparent",cursor:"pointer",color:"rgba(255,255,255,.8)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"7px"}}>
-            <i className="ti ti-arrow-left" style={{fontSize:"14px"}} aria-hidden/>{user?.role==="admin"||user?.role==="management"?"All Projects":"Sign Out"}
+            <i className="ti ti-arrow-left" style={{fontSize:"14px"}} aria-hidden/>{roleKey(user?.role)==="admin"||roleKey(user?.role)==="management"?"All Projects":"Sign Out"}
           </button>
           <div style={{margin:"0 16px 10px",padding:"10px 12px",background:"rgba(255,255,255,.07)",borderRadius:"9px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
@@ -3214,7 +3215,7 @@ export default function App(){
             {user?(
               <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
                 <div style={{width:"32px",height:"32px",borderRadius:"50%",background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:"800",color:"#92400e",flexShrink:0}}>{initials(user?.name)}</div>
-                <div style={{flex:1,minWidth:0,lineHeight:"1.25"}}><div style={{fontSize:"12px",fontWeight:"700",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div><div style={{fontSize:"10px",color:"rgba(255,255,255,.5)"}}>{ROLE_LABELS[user?.role]||user?.role}</div></div>
+                <div style={{flex:1,minWidth:0,lineHeight:"1.25"}}><div style={{fontSize:"12px",fontWeight:"700",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div><div style={{fontSize:"10px",color:"rgba(255,255,255,.5)"}}>{ROLE_LABELS[roleKey(user?.role)]||user?.role}</div></div>
                 <button onClick={handleSignOut} title="Sign out" style={{border:"none",background:"rgba(255,255,255,.08)",color:"#cbd5e1",width:"30px",height:"30px",borderRadius:"8px",cursor:"pointer",fontSize:"14px",flexShrink:0}}><i className="ti ti-logout" aria-hidden/></button>
               </div>
             ):(
@@ -3242,8 +3243,8 @@ export default function App(){
         <div style={{background:NV,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:1000,boxShadow:"0 2px 10px rgba(0,0,0,.25)"}}>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <button onClick={()=>safeNav(()=>{
-              if(user?.role==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
-              else if(user?.role==="management"){setActiveProject(null);setView("dashboard");setAppView("projects");}
+              if(roleKey(user?.role)==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
+              else if(roleKey(user?.role)==="management"){setActiveProject(null);setView("dashboard");setAppView("projects");}
               else{handleSignOut();}
             })} style={{padding:"5px 8px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.3)",background:"transparent",cursor:"pointer",color:"rgba(255,255,255,.8)",fontSize:"12px",display:"flex",alignItems:"center",gap:"3px"}}>
               <i className="ti ti-arrow-left" style={{fontSize:"13px"}} aria-hidden/>
@@ -3319,8 +3320,8 @@ export default function App(){
             ))}
           </div>
           {/* Greeting cards */}
-          {user?.role==="engineer"&&(()=>{const engRec=engineers.find(x=>x.name===user.name||x.id===user.id);return(<div style={{background:`linear-gradient(135deg,${NV},#2d5a9e)`,borderRadius:"14px",padding:"16px 20px",marginBottom:"14px",color:"#fff",display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}}><Av name={user.name} sz={44}/><div style={{flex:1}}><div style={{fontWeight:"800",fontSize:"17px",marginBottom:"3px"}}>Welcome, {user.name.split(" ")[0]}!</div><div style={{fontSize:"13px",color:"rgba(255,255,255,.8)",display:"flex",gap:"12px",flexWrap:"wrap"}}>{engRec?.incharge?<span>👤 Incharge: <strong>{engRec.incharge}</strong></span>:<span style={{color:"#fbbf24"}}>⚠️ No incharge set</span>}{engRec?.dept&&<span>🏗️ {engRec.dept}</span>}{engRec?.designation&&<span>🏷️ {engRec.designation}</span>}</div></div><button onClick={openForm} style={{padding:"10px 18px",borderRadius:"10px",border:"2px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",cursor:"pointer",fontSize:"14px",color:"#fff",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><i className="ti ti-pencil-plus" aria-hidden/>Fill DPR</button></div>);})()}
-          {user?.role==="incharge"&&(()=>{const myEngs=engineers.filter(e=>e.incharge===user.name);const todayStr=new Date().toISOString().slice(0,10);const pendingCount=myEngs.filter(e=>subs.some(s=>s.engineer===e.name&&!s.approved&&!s.needsRevision)).length;return(<div style={{background:`linear-gradient(135deg,#0f766e,#0d9488)`,borderRadius:"14px",padding:"16px 20px",marginBottom:"14px",color:"#fff"}}><div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"10px",flexWrap:"wrap"}}><Av name={user.name} sz={40}/><div style={{flex:1}}><div style={{fontWeight:"800",fontSize:"17px"}}>Welcome, {user.name.split(" ")[0]}!</div><div style={{fontSize:"12px",color:"rgba(255,255,255,.75)"}}>Incharge — {myEngs.length} engineer{myEngs.length!==1?"s":""}</div></div>{pendingCount>0&&<div style={{background:"#fbbf24",color:"#92400e",borderRadius:"10px",padding:"6px 14px",fontWeight:"700",fontSize:"13px"}}>{pendingCount} pending</div>}</div><div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>{myEngs.map(e=>{const submitted=subs.some(s=>s.engineer===e.name&&s.date===todayStr);const approved=subs.some(s=>s.engineer===e.name&&s.date===todayStr&&s.approved);return<div key={e.id} style={{background:"rgba(255,255,255,.15)",borderRadius:"7px",padding:"5px 10px",fontSize:"12px",fontWeight:"600"}}>{approved?"✅":submitted?"⏳":"❌"} {e.name}</div>;})}</div></div>);})()}
+          {roleKey(user?.role)==="engineer"&&(()=>{const engRec=engineers.find(x=>x.name===user.name||x.id===user.id);return(<div style={{background:`linear-gradient(135deg,${NV},#2d5a9e)`,borderRadius:"14px",padding:"16px 20px",marginBottom:"14px",color:"#fff",display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}}><Av name={user.name} sz={44}/><div style={{flex:1}}><div style={{fontWeight:"800",fontSize:"17px",marginBottom:"3px"}}>Welcome, {user.name.split(" ")[0]}!</div><div style={{fontSize:"13px",color:"rgba(255,255,255,.8)",display:"flex",gap:"12px",flexWrap:"wrap"}}>{engRec?.incharge?<span>👤 Incharge: <strong>{engRec.incharge}</strong></span>:<span style={{color:"#fbbf24"}}>⚠️ No incharge set</span>}{engRec?.dept&&<span>🏗️ {engRec.dept}</span>}{engRec?.designation&&<span>🏷️ {engRec.designation}</span>}</div></div><button onClick={openForm} style={{padding:"10px 18px",borderRadius:"10px",border:"2px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",cursor:"pointer",fontSize:"14px",color:"#fff",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><i className="ti ti-pencil-plus" aria-hidden/>Fill DPR</button></div>);})()}
+          {roleKey(user?.role)==="incharge"&&(()=>{const myEngs=engineers.filter(e=>e.incharge===user.name);const todayStr=new Date().toISOString().slice(0,10);const pendingCount=myEngs.filter(e=>subs.some(s=>s.engineer===e.name&&!s.approved&&!s.needsRevision)).length;return(<div style={{background:`linear-gradient(135deg,#0f766e,#0d9488)`,borderRadius:"14px",padding:"16px 20px",marginBottom:"14px",color:"#fff"}}><div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"10px",flexWrap:"wrap"}}><Av name={user.name} sz={40}/><div style={{flex:1}}><div style={{fontWeight:"800",fontSize:"17px"}}>Welcome, {user.name.split(" ")[0]}!</div><div style={{fontSize:"12px",color:"rgba(255,255,255,.75)"}}>Incharge — {myEngs.length} engineer{myEngs.length!==1?"s":""}</div></div>{pendingCount>0&&<div style={{background:"#fbbf24",color:"#92400e",borderRadius:"10px",padding:"6px 14px",fontWeight:"700",fontSize:"13px"}}>{pendingCount} pending</div>}</div><div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>{myEngs.map(e=>{const submitted=subs.some(s=>s.engineer===e.name&&s.date===todayStr);const approved=subs.some(s=>s.engineer===e.name&&s.date===todayStr&&s.approved);return<div key={e.id} style={{background:"rgba(255,255,255,.15)",borderRadius:"7px",padding:"5px 10px",fontSize:"12px",fontWeight:"600"}}>{approved?"✅":submitted?"⏳":"❌"} {e.name}</div>;})}</div></div>);})()}
           {!user&&<div style={{background:"#eff6ff",border:"2px solid #93c5fd",borderRadius:"12px",padding:"14px 16px",marginBottom:"16px",display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
             <div style={{flex:1}}><div style={{fontWeight:"700",fontSize:"14px",color:"#1e40af"}}>Ready to submit today's work?</div></div>
             <button onClick={openForm} style={{padding:"10px 22px",borderRadius:"10px",border:"none",background:AM,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px"}}><i className="ti ti-pencil-plus" aria-hidden/>Fill DPR</button>
@@ -3488,7 +3489,7 @@ export default function App(){
                 </F>
                 <F lbl="Shift" req><Seg opts={["Day","Night"]} val={hdr.shift} onChange={v=>updHdr("shift",v)}/></F>
                 <F lbl="Your Name" req>
-                  {user?.role==="engineer"
+                  {roleKey(user?.role)==="engineer"
                     ?<div style={{padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #86efac",background:"#f0fdf4",fontSize:"15px",fontWeight:"700",color:"#14532d",display:"flex",alignItems:"center",gap:"8px"}}>
                         <i className="ti ti-lock" style={{fontSize:"14px",color:GN}} aria-hidden/>{user.name}
                         <span style={{fontSize:"11px",color:"#6b7280",fontWeight:"400",marginLeft:"auto"}}>Signed in</span>
@@ -3646,7 +3647,7 @@ export default function App(){
               {step<3&&<button onClick={()=>{
                 // Validate Step 1 required fields
                 if(step===0){
-                  const eng=user?.role==="engineer"?user.name:(hdr.engineer==="__other"?(hdr.engCustom||"").trim():hdr.engineer);
+                  const eng=roleKey(user?.role)==="engineer"?user.name:(hdr.engineer==="__other"?(hdr.engCustom||"").trim():hdr.engineer);
                   const errs={};
                   if(!eng)errs.engineer="Required";
                   if(!hdr.date)errs.date="Required";
@@ -3710,7 +3711,7 @@ export default function App(){
           })()}
           {user&&<div style={{background:"#f0fdf4",border:"2px solid #86efac",borderRadius:"12px",padding:"12px 16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"12px"}}>
             <Av name={user.name} sz={40}/>
-            <div><div style={{fontWeight:"700",fontSize:"14px",color:GN}}>Approving as: {user.name}</div><div style={{marginTop:"3px",display:"flex",gap:"6px",alignItems:"center"}}><RoleB role={user.role}/>{user.role==="incharge"&&<span style={{fontSize:"12px",color:"#6b7280"}}>You can only approve your engineers.</span>}</div></div>
+            <div><div style={{fontWeight:"700",fontSize:"14px",color:GN}}>Approving as: {user.name}</div><div style={{marginTop:"3px",display:"flex",gap:"6px",alignItems:"center"}}><RoleB role={user.role}/>{roleKey(user.role)==="incharge"&&<span style={{fontSize:"12px",color:"#6b7280"}}>You can only approve your engineers.</span>}</div></div>
           </div>}
           {apvS.filter(s=>canApprove(s)).length===0
             ?<Card style={{textAlign:"center",padding:"3rem",color:"#9ca3af"}}><i className="ti ti-inbox" style={{fontSize:"32px",display:"block",marginBottom:"8px"}} aria-hidden/>No submissions to approve for this date.</Card>
@@ -3785,7 +3786,7 @@ export default function App(){
         <div>
           {/* Engineers from Users who are assigned to this project */}
           {(()=>{
-            const projEngUsers=users.filter(u=>u.role==="engineer"&&u.assignedProjectId===activeProject?.id);
+            const projEngUsers=users.filter(u=>roleKey(u.role)==="engineer"&&u.assignedProjectId===activeProject?.id);
             const noIncharge=projEngUsers.filter(u=>{const er=engineers.find(e=>e.name===u.name);return !er?.incharge;});
             return(
               <>
@@ -3820,7 +3821,7 @@ export default function App(){
                                     .then(()=>flash("✅ Saved")).catch(e=>flash(e.message,"err"));
                                 }}
                                 onRemove={()=>flash("To remove: go to Users tab and change their project assignment","err")}
-                                inchargeOpts={users.filter(x=>x.role==="incharge"&&x.assignedProjectId===activeProject?.id).map(x=>x.name)}
+                                inchargeOpts={users.filter(x=>roleKey(x.role)==="incharge"&&x.assignedProjectId===activeProject?.id).map(x=>x.name)}
                                 designationOpts={lists.designations||DESIGNATIONS}
                                 deptOpts={lists.depts||DEPTS}
                               />
@@ -3842,8 +3843,8 @@ export default function App(){
       {view==="monthly"&&(
         <div>
           {/* Role scope banner */}
-          {user?.role==="engineer"&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:"10px",padding:"10px 16px",marginBottom:"12px",fontSize:"13px",color:"#1e40af",fontWeight:"600",display:"flex",alignItems:"center",gap:"8px"}}><i className="ti ti-user" style={{fontSize:"15px"}} aria-hidden/>Showing your personal DPR data only</div>}
-          {user?.role==="incharge"&&(()=>{const myEngs=engineers.filter(e=>e.incharge===user.name);return<div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"10px",padding:"10px 16px",marginBottom:"12px",fontSize:"13px",color:"#166534",fontWeight:"600",display:"flex",alignItems:"center",gap:"8px"}}><i className="ti ti-users-group" style={{fontSize:"15px"}} aria-hidden/>Showing data for your engineers: {myEngs.length>0?myEngs.map(e=>e.name).join(", "):"(no engineers assigned yet)"}</div>;})()}
+          {roleKey(user?.role)==="engineer"&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:"10px",padding:"10px 16px",marginBottom:"12px",fontSize:"13px",color:"#1e40af",fontWeight:"600",display:"flex",alignItems:"center",gap:"8px"}}><i className="ti ti-user" style={{fontSize:"15px"}} aria-hidden/>Showing your personal DPR data only</div>}
+          {roleKey(user?.role)==="incharge"&&(()=>{const myEngs=engineers.filter(e=>e.incharge===user.name);return<div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"10px",padding:"10px 16px",marginBottom:"12px",fontSize:"13px",color:"#166534",fontWeight:"600",display:"flex",alignItems:"center",gap:"8px"}}><i className="ti ti-users-group" style={{fontSize:"15px"}} aria-hidden/>Showing data for your engineers: {myEngs.length>0?myEngs.map(e=>e.name).join(", "):"(no engineers assigned yet)"}</div>;})()}
           <Card style={{marginBottom:"14px"}}>
             <div style={{fontWeight:"700",fontSize:"16px",color:NV,marginBottom:"14px"}}>📊 Consolidated DPR Report</div>
             <Grid cols={mobile?"1fr":"1fr 1fr 1fr auto"}>
@@ -3914,7 +3915,7 @@ export default function App(){
                       <thead><tr style={{background:"#f8fafc"}}>{["Date","Day","Present","Absent","Activities","Approved"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:"700",color:"#6b7280",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap",fontSize:"11px"}}>{h}</th>)}</tr></thead>
                       <tbody>{days.map(d=>{
                         const ds=ms.filter(s=>s.date===d);
-                        const scopedEngCount=user?.role==="engineer"?1:user?.role==="incharge"?engineers.filter(e=>e.incharge===user.name).length:engineers.length;
+                        const scopedEngCount=roleKey(user?.role)==="engineer"?1:roleKey(user?.role)==="incharge"?engineers.filter(e=>e.incharge===user.name).length:engineers.length;
                         const pres=[...new Set(ds.map(s=>s.engineer))].length;
                         const acts=ds.reduce((a,s)=>a+(s.activities||[]).length,0);
                         const apvd=ds.filter(s=>s.approved).length;
@@ -3934,7 +3935,7 @@ export default function App(){
                   </div>
                 </Card>
                 {/* Chainage Progress Tracker — management/admin only */}
-                {(user?.role==="admin"||user?.role==="management")&&(()=>{
+                {(roleKey(user?.role)==="admin"||roleKey(user?.role)==="management")&&(()=>{
                   const workMap={};
                   ms.forEach(s=>(s.activities||[]).forEach(a=>{
                     if(!a.chFrom||!a.chTo)return;
@@ -4003,7 +4004,7 @@ export default function App(){
 
       {/* ═══ SHARE MODAL ═══ */}
       
-      {shareOpen&&<ShareModal subs={user?.role==="engineer"||user?.role==="incharge"?getReportSubs():subs} engineers={engineers} dashDate={dashDate} reportFrom={reportFrom} reportTo={reportTo} onClose={()=>setShareOpen(false)} flash={flash}/>}
+      {shareOpen&&<ShareModal subs={roleKey(user?.role)==="engineer"||roleKey(user?.role)==="incharge"?getReportSubs():subs} engineers={engineers} dashDate={dashDate} reportFrom={reportFrom} reportTo={reportTo} onClose={()=>setShareOpen(false)} flash={flash}/>}
     </div>
   );
 }
