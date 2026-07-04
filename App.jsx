@@ -2756,10 +2756,11 @@ export default function App(){
     setUser(u);
     setShowLogin(false);
     flash("✅ Signed in as "+u.name);
-    const role=u.role;
+    const role=roleKey(u.role);
     if(role==="admin"){setAppView("globalAdmin");return;}
-    if(role==="management"){setAppView("projects");return;}
-    // engineer or incharge — route to their single assigned project
+    // Management, or anyone granted "All projects" access — show the project picker
+    if(role==="management"||u.projectAccess==="all"){setAppView("projects");return;}
+    // engineer or incharge with a single assigned project — go straight there
     const assignedPid=u.assignedProjectId;
     if(!assignedPid){setAppView("noProject");return;}
     const proj=projects.find(p=>p.id===assignedPid);
@@ -3137,10 +3138,10 @@ export default function App(){
           </div>
           <button onClick={()=>safeNav(()=>{
             if(roleKey(user?.role)==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
-            else if(roleKey(user?.role)==="management"){setActiveProject(null);setView("dashboard");setAppView("projects");}
-            else{handleSignOut();} // engineers/incharges: sign out instead of showing wrong screen
+            else if(roleKey(user?.role)==="management"||user?.projectAccess==="all"){setActiveProject(null);setView("dashboard");setAppView("projects");}
+            else{handleSignOut();} // single-project engineers/incharges: sign out instead of showing wrong screen
           })} style={{margin:"0 12px 10px",padding:"9px 11px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.2)",background:"transparent",cursor:"pointer",color:"rgba(255,255,255,.8)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"7px"}}>
-            <i className="ti ti-arrow-left" style={{fontSize:"14px"}} aria-hidden/>{roleKey(user?.role)==="admin"||roleKey(user?.role)==="management"?"All Projects":"Sign Out"}
+            <i className="ti ti-arrow-left" style={{fontSize:"14px"}} aria-hidden/>{roleKey(user?.role)==="admin"||roleKey(user?.role)==="management"||user?.projectAccess==="all"?"All Projects":"Sign Out"}
           </button>
           <div style={{margin:"0 16px 10px",padding:"10px 12px",background:"rgba(255,255,255,.07)",borderRadius:"9px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
@@ -3192,7 +3193,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <button onClick={()=>safeNav(()=>{
               if(roleKey(user?.role)==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
-              else if(roleKey(user?.role)==="management"){setActiveProject(null);setView("dashboard");setAppView("projects");}
+              else if(roleKey(user?.role)==="management"||user?.projectAccess==="all"){setActiveProject(null);setView("dashboard");setAppView("projects");}
               else{handleSignOut();}
             })} style={{padding:"5px 8px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.3)",background:"transparent",cursor:"pointer",color:"rgba(255,255,255,.8)",fontSize:"12px",display:"flex",alignItems:"center",gap:"3px"}}>
               <i className="ti ti-arrow-left" style={{fontSize:"13px"}} aria-hidden/>
