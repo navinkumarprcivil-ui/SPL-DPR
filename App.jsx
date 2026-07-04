@@ -110,6 +110,7 @@ const DEFAULT_WT=["C&G","BT Dismantling","WBM Dismantling","Excavation","Embankm
 const ROLE_CAPS={engineer:{fill:true,approve:false,download:false,manage:false,settings:false,users:false},incharge:{fill:true,approve:true,download:false,manage:false,settings:false,users:false},management:{fill:false,approve:true,download:true,manage:true,settings:false,users:false},admin:{fill:true,approve:true,download:true,manage:true,settings:true,users:true}};
 const ROLE_LABELS={engineer:"Engineer",incharge:"Incharge",management:"Management",admin:"Admin"};
 const roleKey=r=>(r||"").trim().toLowerCase();
+const isSuperAdminUser=u=>!!u&&(u.id==="superadmin"||(roleKey(u.role)==="admin"&&(u.name||"").trim().toLowerCase()==="super admin"));
 const fmtTs=ts=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+", "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true}).toLowerCase();};
 const WEATHER_OPTS=["☀️ Clear","🌤️ Partly Cloudy","☁️ Overcast","🌦️ Light Rain","🌧️ Heavy Rain","🌫️ Fog","🌡️ Extreme Heat"];
 const PROBLEM_OPTS=[
@@ -697,10 +698,6 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
   const lateEngVal=edits.lateEngDeduct!==undefined?edits.lateEngDeduct:String(globalLists.lateEngDeduct??0.5);
   const lateIcVal=edits.lateInchargeDeduct!==undefined?edits.lateInchargeDeduct:String(globalLists.lateInchargeDeduct??0.25);
   const apvVal=edits.dprApprovalDays!==undefined?edits.dprApprovalDays:String(globalLists.dprApprovalDays??3);
-  const otpMobVal=edits.otpMobile!==undefined?edits.otpMobile:(globalLists.otpMobile||"");
-  const otpWaVal=edits.otpWhatsapp!==undefined?edits.otpWhatsapp:(globalLists.otpWhatsapp||"");
-  const otpChVal=edits.otpChannel!==undefined?edits.otpChannel:(globalLists.otpChannel||"auto");
-  const otpTarget=(()=>{const mob=otpMobVal.trim(),wa=otpWaVal.trim();if(otpChVal==="sms")return mob?"SMS \u2192 "+mob:"\u2014 not configured";if(otpChVal==="whatsapp")return wa?"WhatsApp \u2192 "+wa:"\u2014 not configured";return wa?"WhatsApp \u2192 "+wa:mob?"SMS \u2192 "+mob:"\u2014 not configured";})();
   const rf=globalLists.requiredFields||{};
 
   // Field definitions grouped by section
@@ -762,12 +759,6 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
     if([starStart,engD,icD].some(n=>isNaN(n)||n<0)){flash("Enter valid non-negative star values","err");return;}
     rtdbPut('config/globalLists',{...globalLists,dprApprovalDays:apv,dateLockDays:lock,starStart,lateEngDeduct:engD,lateInchargeDeduct:icD})
       .then(()=>{setGlobalLists(p=>({...p,dprApprovalDays:apv,dateLockDays:lock,starStart,lateEngDeduct:engD,lateInchargeDeduct:icD}));flash("✅ Settings saved");})
-      .catch(e=>flash("Failed: "+e.message,"err"));
-  }
-  function saveOtp(){
-    const mob=otpMobVal.trim(),wa=otpWaVal.trim();
-    rtdbPut('config/globalLists',{...globalLists,otpMobile:mob,otpWhatsapp:wa,otpChannel:otpChVal})
-      .then(()=>{setGlobalLists(p=>({...p,otpMobile:mob,otpWhatsapp:wa,otpChannel:otpChVal}));flash("✅ Deletion OTP settings saved");})
       .catch(e=>flash("Failed: "+e.message,"err"));
   }
 
@@ -857,32 +848,6 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
         </div>
 
         <button onClick={saveWindowsAndStars} style={{width:"100%",padding:"12px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save Settings</button>
-      </Card>
-
-      {/* Deletion OTP Recipient */}
-      <Card>
-        <div style={{fontWeight:"700",fontSize:"15px",color:NV,marginBottom:"6px"}}>🛡 Deletion OTP Recipient</div>
-        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>When an admin deletes a project, a one-time code must be confirmed. If a number is set below, the code is sent there (via your phone's SMS/WhatsApp) instead of being shown on screen.</p>
-        <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr",gap:"12px",marginBottom:"12px"}}>
-          <div>
-            <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>📱 Admin Mobile (SMS)</label>
-            <Inp value={otpMobVal} onChange={e=>setEdits(p=>({...p,otpMobile:e.target.value}))} placeholder="+91 98765 43210"/>
-          </div>
-          <div>
-            <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>💬 Admin WhatsApp</label>
-            <Inp value={otpWaVal} onChange={e=>setEdits(p=>({...p,otpWhatsapp:e.target.value}))} placeholder="+91 98765 43210"/>
-          </div>
-        </div>
-        <label style={{fontSize:"12px",fontWeight:"700",color:"#374151",display:"block",marginBottom:"6px"}}>Send OTP via</label>
-        <div style={{display:"flex",gap:"8px"}}>
-          {[["auto","Auto","ti-wand"],["sms","SMS","ti-device-mobile"],["whatsapp","WhatsApp","ti-brand-whatsapp"]].map(([v,l,ic])=>(
-            <button key={v} onClick={()=>setEdits(p=>({...p,otpChannel:v}))} style={{display:"flex",alignItems:"center",gap:"6px",padding:"9px 15px",borderRadius:"9px",border:`2px solid ${otpChVal===v?NV:"#e5e7eb"}`,background:otpChVal===v?"#eff6ff":"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700",color:otpChVal===v?NV:"#6b7280"}}>
-              <i className={"ti "+ic} aria-hidden/>{l}
-            </button>
-          ))}
-        </div>
-        <div style={{fontSize:"12px",color:"#6b7280",marginTop:"12px",background:"#f8fafc",borderRadius:"8px",padding:"10px 12px",lineHeight:"1.5"}}>The code will be delivered to <strong style={{color:"#374151"}}>{otpTarget}</strong>. Leave both blank to show the code on screen instead.</div>
-        <button onClick={saveOtp} style={{marginTop:"12px",width:"100%",padding:"12px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save OTP Settings</button>
       </Card>
 
       {/* Roles */}
@@ -1461,25 +1426,15 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
   const [delProj,setDelProj]=useState(null);
   const [delCode,setDelCode]=useState("");
   const [delInput,setDelInput]=useState("");
-  const otpMobile=(globalLists?.otpMobile||"").trim();
-  const otpWhatsapp=(globalLists?.otpWhatsapp||"").trim();
-  const otpChannel=globalLists?.otpChannel||"auto";
-  const otpTarget=otpChannel==="sms"?(otpMobile?{ch:"SMS",num:otpMobile}:null):otpChannel==="whatsapp"?(otpWhatsapp?{ch:"WhatsApp",num:otpWhatsapp}:null):(otpWhatsapp?{ch:"WhatsApp",num:otpWhatsapp}:otpMobile?{ch:"SMS",num:otpMobile}:null);
-  function sendOtp(p,code){
-    if(!otpTarget)return;
-    const msg="SPL DPR \u2014 deletion code for project \""+p.name+"\": "+code;
-    const num=otpTarget.num.replace(/\D/g,"");
-    if(otpTarget.ch==="WhatsApp")window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg),"_blank");
-    else window.open("sms:"+otpTarget.num+"?&body="+encodeURIComponent(msg),"_blank");
-  }
+  const isSuper=isSuperAdminUser(user);
   function deleteProject(id){
+    if(!isSuper){flash("Only the Super Admin can delete projects","err");return;}
     const p=projects.find(x=>x.id===id);if(!p)return;
     const code=""+Math.floor(100000+Math.random()*900000);
     setDelProj(p);setDelCode(code);setDelInput("");
-    sendOtp(p,code);
   }
   function confirmDeleteProject(){
-    if(!delProj)return;
+    if(!delProj||!isSuper)return;
     if(delInput!==delCode){flash("Code does not match","err");return;}
     const p=delProj;
     rtdbDelete('projects/'+p.id).then(()=>flash("\uD83D\uDDD1 "+p.name+" deleted")).catch(e=>flash(e.message,"err"));
@@ -1554,7 +1509,7 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
                       <div style={{fontWeight:"800",fontSize:"20px",lineHeight:1.2}}>{p.name}</div>
                       {isAdmin&&<div style={{display:"flex",gap:"6px"}}>
                         <button onClick={()=>{setEditId(p.id);setEditData({});}} style={{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.4)",background:"transparent",cursor:"pointer",color:"#fff",fontSize:"12px"}}>✏️</button>
-                        <button onClick={()=>deleteProject(p.id)} style={{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.4)",background:"transparent",cursor:"pointer",color:"#fca5a5",fontSize:"12px"}}>🗑️</button>
+                        {isSuper&&<button onClick={()=>deleteProject(p.id)} style={{padding:"5px 10px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.4)",background:"transparent",cursor:"pointer",color:"#fca5a5",fontSize:"12px"}}>🗑️</button>}
                       </div>}
                     </div>
                     {p.code&&<div style={{fontSize:"13px",color:"rgba(255,255,255,.75)",marginTop:"4px"}}>📋 {p.code}</div>}
@@ -1605,11 +1560,7 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
             </div>
             <div style={{padding:"20px"}}>
               <div style={{fontSize:"14px",color:"#374151",marginBottom:"10px"}}>Permanently delete <strong>{delProj.name}</strong> and all DPRs, engineers &amp; data inside it? This cannot be undone.</div>
-              {otpTarget?(
-                <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",background:"#f8fafc",borderRadius:"8px",padding:"10px 12px",lineHeight:"1.5"}}><i className="ti ti-send" aria-hidden/> A 6-digit code was sent via <strong>{otpTarget.ch}</strong> to <strong>{otpTarget.num}</strong>. Enter it below to confirm. <button onClick={()=>sendOtp(delProj,delCode)} style={{border:"none",background:"none",color:NV,cursor:"pointer",fontWeight:"700",fontSize:"13px",padding:0,textDecoration:"underline"}}>Resend code</button></div>
-              ):(
-                <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px"}}>Type the confirmation code <strong style={{fontFamily:"monospace",fontSize:"17px",color:RD,letterSpacing:"0.18em"}}>{delCode}</strong> below.</div>
-              )}
+              <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px"}}>Type the confirmation code <strong style={{fontFamily:"monospace",fontSize:"17px",color:RD,letterSpacing:"0.18em"}}>{delCode}</strong> below.</div>
               <Inp value={delInput} onChange={e=>setDelInput(e.target.value)} placeholder="Enter code" style={{fontFamily:"monospace",letterSpacing:"0.12em",textAlign:"center",fontSize:"18px"}}/>
               <div style={{display:"flex",gap:"10px",marginTop:"16px"}}>
                 <button onClick={()=>setDelProj(null)} style={{flex:1,padding:"11px",borderRadius:"9px",border:"1.5px solid #d1d5db",background:"#fff",color:"#475569",fontWeight:"700",cursor:"pointer",fontSize:"14px"}}>Cancel</button>
@@ -2258,9 +2209,6 @@ export default function App(){
     lateEngDeduct:0.5,
     lateInchargeDeduct:0.25,
     dprApprovalDays:3,
-    otpMobile:"",
-    otpWhatsapp:"",
-    otpChannel:"auto",
     requiredFields:{
       // Step 1 - Header
       dept:true, incharge:false, weather:false, difficulty:false,
@@ -2484,9 +2432,6 @@ export default function App(){
         ...(dt.lateEngDeduct!=null&&{lateEngDeduct:Number(dt.lateEngDeduct)}),
         ...(dt.lateInchargeDeduct!=null&&{lateInchargeDeduct:Number(dt.lateInchargeDeduct)}),
         ...(dt.dprApprovalDays!=null&&{dprApprovalDays:Number(dt.dprApprovalDays)}),
-        ...(dt.otpMobile!=null&&{otpMobile:dt.otpMobile}),
-        ...(dt.otpWhatsapp!=null&&{otpWhatsapp:dt.otpWhatsapp}),
-        ...(dt.otpChannel!=null&&{otpChannel:dt.otpChannel}),
         ...(dt.requiredFields&&{requiredFields:{...prev.requiredFields,...dt.requiredFields}}),
       }));
     });
