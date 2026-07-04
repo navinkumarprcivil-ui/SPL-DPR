@@ -153,7 +153,7 @@ function useMobile(){
 
 // ─── UI ATOMS ─────────────────────────────────────────────────────────────────
 function L({t,req}){return <label style={{fontSize:"13px",color:"#374151",fontWeight:"600",display:"block",marginBottom:"5px"}}>{t}{req&&<span style={{color:RD,marginLeft:"2px"}}>*</span>}</label>;}
-function Inp({style,...p}){return <input {...p} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",color:"#111827",background:"#fff",...(style||{})}}/>;}
+function Inp({style,...p}){return <input inputMode={p.type==="number"?"decimal":p.type==="tel"?"tel":undefined} {...p} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",color:"#111827",background:"#fff",...(style||{})}}/>;}
 function Sel({val,onChange,opts=[],placeholder,children}){
   return <select value={val} onChange={e=>onChange(e.target.value)} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",color:val?"#111827":"#6b7280",background:"#fff",minWidth:0,maxWidth:"100%",WebkitAppearance:"none",MozAppearance:"none",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center",paddingRight:"34px",overflow:"hidden",textOverflow:"ellipsis"}}>
     {placeholder&&<option value="">{placeholder}</option>}
@@ -2164,6 +2164,7 @@ export default function App(){
   const [activeProject,setActiveProject]=useState(null);
   const [view,setView]=useState("dashboard");
   const [step,setStep]=useState(0);
+  useEffect(()=>{if(view==="form")window.scrollTo({top:0,behavior:"smooth"});},[step,view]);
   const [hdr,setHdr]=useState(mkHdr());
   const [acts,setActs]=useState([]);
   const [matTxs,setMatTxs]=useState([]);
@@ -3412,10 +3413,10 @@ export default function App(){
             </Card>
           )}
           {user&&<>
-          {/* Step indicator */}
-          <div style={{display:"flex",gap:"4px",marginBottom:"16px",overflowX:"auto",paddingBottom:"4px"}}>
+          {/* Step indicator — sticky on mobile so site engineers always see where they are */}
+          <div style={{display:"flex",gap:mobile?"6px":"4px",marginBottom:"16px",overflowX:"auto",paddingBottom:"4px",...(mobile?{position:"sticky",top:"46px",zIndex:500,background:"#f8fafc",paddingTop:"8px",margin:"-8px -2px 12px",paddingLeft:"2px",paddingRight:"2px",boxShadow:"0 6px 8px -8px rgba(0,0,0,.25)"}:{})}}>
             {[{t:mobile?"Details":"1 — Your Details"},{t:mobile?"Materials":"2 — Material Moves"},{t:mobile?"Work":"3 — Work Activities"},{t:mobile?"Submit":"4 — Review & Submit"}].map((s,idx)=>(
-              <button key={idx} onClick={()=>setStep(idx)} style={{display:"flex",alignItems:"center",gap:"6px",padding:mobile?"10px 12px":"8px 16px",borderRadius:"10px",cursor:"pointer",flexShrink:0,border:`2px solid ${idx===step?AM:idx<step?GN:"#e5e7eb"}`,background:idx===step?"#fffbeb":idx<step?"#f0fdf4":"#fff"}}>
+              <button key={idx} onClick={()=>setStep(idx)} style={{display:"flex",alignItems:"center",gap:"6px",padding:mobile?"11px 13px":"8px 16px",borderRadius:"10px",cursor:"pointer",flexShrink:0,flex:mobile?1:undefined,justifyContent:mobile?"center":undefined,border:`2px solid ${idx===step?AM:idx<step?GN:"#e5e7eb"}`,background:idx===step?"#fffbeb":idx<step?"#f0fdf4":"#fff"}}>
                 <div style={{width:"22px",height:"22px",borderRadius:"50%",background:idx===step?AM:idx<step?GN:"#d1d5db",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{idx<step?<span style={{fontSize:"12px",color:"#fff",fontWeight:"800"}}>✓</span>:<span style={{fontSize:"11px",color:idx===step?"#fff":"#9ca3af",fontWeight:"800"}}>{idx+1}</span>}</div>
                 <span style={{fontSize:mobile?"12px":"12px",fontWeight:"700",color:idx===step?"#92400e":idx<step?GN:"#9ca3af",whiteSpace:"nowrap"}}>{s.t}</span>
               </button>
@@ -3585,9 +3586,9 @@ export default function App(){
             </Card>
           )}
 
-          {/* Navigation buttons */}
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:"16px",gap:"10px"}}>
-            <button onClick={()=>{if(step>0){setStep(s=>s-1);}else{safeNav(()=>setView("dashboard"));}}} style={{padding:"13px 20px",borderRadius:"10px",border:"2px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"700",display:"flex",alignItems:"center",gap:"6px",color:"#374151",flex:mobile?"1":"0 0 auto"}}>
+          {/* Navigation buttons — sticky above the tab bar on mobile so Next/Submit is always reachable */}
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:"16px",gap:"10px",...(mobile?{position:"sticky",bottom:"64px",zIndex:500,background:"#f8fafc",padding:"10px 2px calc(10px + env(safe-area-inset-bottom))",margin:"16px -2px 0",borderTop:"1px solid #e5e7eb",boxShadow:"0 -6px 8px -8px rgba(0,0,0,.25)"}:{})}}>
+            <button onClick={()=>{if(step>0){setStep(s=>s-1);}else{safeNav(()=>setView("dashboard"));}}} style={{padding:mobile?"15px 18px":"13px 20px",borderRadius:"10px",border:"2px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:mobile?"15px":"14px",fontWeight:"700",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",color:"#374151",flex:mobile?"1":"0 0 auto"}}>
               <i className="ti ti-arrow-left" aria-hidden/>{step===0?"Dashboard":"Previous"}
             </button>
             <div style={{display:"flex",gap:"8px",flex:mobile?"1":"0 0 auto"}}>
@@ -3613,8 +3614,8 @@ export default function App(){
                   setHasUnsavedForm(false);
                 }
                 setStep(s=>s+1);
-              }} style={{flex:mobile?1:undefined,padding:"13px 24px",borderRadius:"10px",border:"none",background:AM,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>Next <i className="ti ti-arrow-right" aria-hidden/></button>}
-              {step===3&&<button onClick={submitDPR} style={{flex:mobile?1:undefined,padding:"13px 28px",borderRadius:"10px",border:"none",background:GN,color:"#fff",cursor:"pointer",fontSize:"15px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}><i className="ti ti-send" aria-hidden/>Submit DPR</button>}
+              }} style={{flex:mobile?1:undefined,padding:mobile?"15px 22px":"13px 24px",borderRadius:"10px",border:"none",background:AM,color:"#fff",cursor:"pointer",fontSize:mobile?"15px":"14px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>Next <i className="ti ti-arrow-right" aria-hidden/></button>}
+              {step===3&&<button onClick={submitDPR} style={{flex:mobile?1:undefined,padding:mobile?"15px 24px":"13px 28px",borderRadius:"10px",border:"none",background:GN,color:"#fff",cursor:"pointer",fontSize:mobile?"16px":"15px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}><i className="ti ti-send" aria-hidden/>Submit DPR</button>}
             </div>
           </div>
           </>}
