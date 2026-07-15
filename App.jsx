@@ -169,6 +169,27 @@ function DeptB({dept}){if(!dept)return null;const d=dept.toLowerCase();const[bg,
 function RoleB({role}){const m={engineer:["#dbeafe","#1e40af"],incharge:["#dcfce7","#166534"],management:["#ede9fe","#5b21b6"],admin:["#fef9c3","#854d0e"]};const[bg,fg]=m[roleKey(role)]||["#f3f4f6","#374151"];return <span style={{background:bg,color:fg,padding:"3px 8px",borderRadius:"5px",fontSize:"11px",fontWeight:"700"}}>{ROLE_LABELS[roleKey(role)]||role}</span>;}
 function Pill({label,color,bg}){return <span style={{background:bg||"#f3f4f6",color:color||"#374151",padding:"3px 9px",borderRadius:"5px",fontSize:"11px",fontWeight:"700",whiteSpace:"nowrap"}}>{label}</span>;}
 function Card({children,style}){return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"16px",...(style||{})}}>{children}</div>;}
+// Cinematic one-time splash shown while the app boots. Auto-dismisses.
+function SplashScreen({onDone}){
+  const [leaving,setLeaving]=useState(false);
+  useEffect(()=>{
+    const t1=setTimeout(()=>setLeaving(true),1900); // start fade-out
+    const t2=setTimeout(()=>onDone&&onDone(),2500);  // unmount after fade
+    return()=>{clearTimeout(t1);clearTimeout(t2);};
+  },[]);
+  return(
+    <div id="spl-splash" style={{position:"fixed",inset:0,zIndex:100001,background:`radial-gradient(circle at 50% 42%, #2d5a9e 0%, ${NV} 55%, #14315a 100%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",animation:leaving?"splFadeOut .55s ease forwards":"none"}}>
+      <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:"22px"}}>
+        {/* expanding rings behind the logo */}
+        <div style={{position:"absolute",width:"140px",height:"140px",borderRadius:"50%",border:"2px solid rgba(245,158,11,.35)",animation:"splRing 1.8s ease-out .3s infinite"}}/>
+        <div style={{position:"absolute",width:"140px",height:"140px",borderRadius:"50%",border:"2px solid rgba(255,255,255,.18)",animation:"splRing 1.8s ease-out .7s infinite"}}/>
+        <img src={LOGO} alt="SPL" style={{height:"92px",width:"92px",objectFit:"contain",borderRadius:"18px",background:"#fff",padding:"10px",animation:"splLogoIn 1.1s cubic-bezier(.2,.7,.2,1) both, splGlow 2.2s ease-in-out .9s infinite",position:"relative"}}/>
+      </div>
+      <div style={{fontSize:"22px",fontWeight:"800",color:"#fff",letterSpacing:"-0.3px",animation:"splRiseUp .8s ease .5s both",textAlign:"center",padding:"0 20px"}}>SPL Infrastructure</div>
+      <div style={{fontSize:"12px",color:"rgba(255,255,255,.6)",letterSpacing:"0.18em",textTransform:"uppercase",marginTop:"7px",animation:"splRiseUp .8s ease .72s both"}}>Daily Progress Report</div>
+    </div>
+  );
+}
 function SecHead({title,subtitle,color}){return <div style={{fontWeight:"700",fontSize:"13px",color:color||NV,marginBottom:"14px",paddingBottom:"8px",borderBottom:`2px solid ${color||NV}20`}}>{title}{subtitle&&<div style={{fontWeight:"400",fontSize:"11px",color:"#6b7280",marginTop:"2px"}}>{subtitle}</div>}</div>;}
 
 // ─── SECTION BOX (colored header, no overflow:hidden) ─────────────────────────
@@ -690,9 +711,11 @@ function LoginModal({users,onLogin,onClose}){
 
 // ─── GLOBAL ENGINEERS PANEL ──────────────────────────────────────────────────
 // ─── GLOBAL SETTINGS PANEL ───────────────────────────────────────────────────
-function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
+function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile,users=[]}){
   const [edits,setEdits]=useState({});
-  const rolesVal=edits.roles!==undefined?edits.roles:(globalLists.roles||Object.keys(ROLE_CAPS)).join("\n");
+  const [newRole,setNewRole]=useState("");
+  const [delRole,setDelRole]=useState(null); // role pending delete confirmation
+  const roles=globalLists.roles&&globalLists.roles.length?globalLists.roles:Object.keys(ROLE_CAPS);
   const lockVal=edits.dateLockDays!==undefined?edits.dateLockDays:String(globalLists.dateLockDays??2);
   const starStartVal=edits.starStart!==undefined?edits.starStart:String(globalLists.starStart??5);
   const lateEngVal=edits.lateEngDeduct!==undefined?edits.lateEngDeduct:String(globalLists.lateEngDeduct??0.5);
@@ -744,13 +767,24 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
       .catch(e=>flash("Failed: "+e.message,"err"));
   }
 
-  function saveRoles(){
-    const lines=rolesVal.split("\n").map(s=>s.trim()).filter(Boolean);
-    if(!lines.length){flash("List cannot be empty","err");return;}
-    rtdbPut('config/globalLists',{...globalLists,roles:lines})
-      .then(()=>{setGlobalLists(p=>({...p,roles:lines}));flash("✅ Roles saved");})
+  function persistRoles(next,okMsg){
+    rtdbPut('config/globalLists',{...globalLists,roles:next})
+      .then(()=>{setGlobalLists(p=>({...p,roles:next}));flash(okMsg);})
       .catch(e=>flash("Failed: "+e.message,"err"));
   }
+  function addRole(){
+    const name=newRole.trim();
+    if(!name){flash("Enter a role name","err");return;}
+    if(roles.some(r=>r.toLowerCase()===name.toLowerCase())){flash("That role already exists","err");return;}
+    persistRoles([...roles,name],"✅ Role \""+name+"\" added");
+    setNewRole("");
+  }
+  function confirmDeleteRole(){
+    const name=delRole;if(!name){return;}
+    persistRoles(roles.filter(r=>r!==name),"🗑 Role \""+name+"\" removed");
+    setDelRole(null);
+  }
+  const roleUserCount=name=>users.filter(u=>roleKey(u.role)===roleKey(name)).length;
 
   function saveWindowsAndStars(){
     const apv=parseInt(apvVal), lock=parseInt(lockVal);
@@ -854,16 +888,51 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile}){
       <Card>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
           <div style={{fontWeight:"700",fontSize:"15px",color:NV}}>🎭 User Roles</div>
-          <span style={{fontSize:"12px",color:"#9ca3af"}}>{(globalLists.roles||[]).length} roles</span>
+          <span style={{fontSize:"12px",color:"#9ca3af"}}>{roles.length} role{roles.length===1?"":"s"}</span>
         </div>
-        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"10px",marginTop:0}}>One role per line. Appears in the Role dropdown when creating users.</p>
-        <textarea value={rolesVal} onChange={e=>setEdits(p=>({...p,roles:e.target.value}))} rows={8}
-          style={{width:"100%",boxSizing:"border-box",fontFamily:"monospace",fontSize:"14px",padding:"12px",border:"2px solid #d1d5db",borderRadius:"10px",background:"#f9fafb",lineHeight:"1.9",resize:"vertical"}}/>
-        <div style={{display:"flex",gap:"10px",marginTop:"12px"}}>
-          <button onClick={saveRoles} style={{flex:1,padding:"12px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800"}}>💾 Save Roles</button>
-          <button onClick={()=>setEdits(p=>({...p,roles:Object.keys(ROLE_CAPS).join("\n")}))} style={{padding:"12px 14px",borderRadius:"10px",border:"1px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:"13px",color:"#6b7280"}}>Reset</button>
+        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>Add or remove the roles that appear in the Role dropdown when creating or editing users.</p>
+        {/* Add a role */}
+        <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
+          <Inp value={newRole} onChange={e=>setNewRole(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addRole();}} placeholder="New role name — e.g. Surveyor"/>
+          <button onClick={addRole} style={{flexShrink:0,padding:"11px 18px",borderRadius:"8px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",display:"flex",alignItems:"center",gap:"6px"}}><i className="ti ti-plus" aria-hidden/>Add</button>
+        </div>
+        {/* Existing roles */}
+        <div style={{display:"flex",flexDirection:"column",gap:"7px"}}>
+          {roles.map(r=>{
+            const inUse=roleUserCount(r);
+            const core=!!ROLE_CAPS[roleKey(r)];
+            return(
+              <div key={r} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"9px",border:"1px solid #e5e7eb",background:"#f9fafb"}}>
+                <span style={{fontWeight:"700",fontSize:"14px",color:"#111827",textTransform:"capitalize"}}>{ROLE_LABELS[roleKey(r)]||r}</span>
+                {core&&<span style={{fontSize:"10px",fontWeight:"700",color:"#1e40af",background:"#dbeafe",padding:"2px 7px",borderRadius:"20px"}}>Built-in</span>}
+                {inUse>0&&<span style={{fontSize:"11px",color:"#6b7280"}}>{inUse} user{inUse===1?"":"s"}</span>}
+                <button onClick={()=>setDelRole(r)} title={"Remove "+r} style={{marginLeft:"auto",flexShrink:0,width:"32px",height:"32px",borderRadius:"8px",border:"1px solid #fca5a5",background:"#fef2f2",color:RD,cursor:"pointer",fontSize:"14px"}}><i className="ti ti-trash" aria-hidden/></button>
+              </div>
+            );
+          })}
+          {roles.length===0&&<div style={{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"14px 0"}}>No roles yet — add one above.</div>}
         </div>
       </Card>
+
+      {/* Delete-role confirmation */}
+      {delRole&&(()=>{const inUse=roleUserCount(delRole);return(
+        <div onClick={()=>setDelRole(null)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",zIndex:2000}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"14px",width:"100%",maxWidth:"400px",overflow:"hidden",boxShadow:"0 30px 60px -20px rgba(0,0,0,.4)"}}>
+            <div style={{padding:"16px 20px",background:"#fef2f2",borderBottom:"1px solid #fecaca",display:"flex",alignItems:"center",gap:"10px"}}>
+              <i className="ti ti-alert-triangle" style={{color:RD,fontSize:"20px"}} aria-hidden/>
+              <div style={{fontWeight:"800",fontSize:"15px",color:"#991b1b"}}>Remove Role</div>
+            </div>
+            <div style={{padding:"20px"}}>
+              <div style={{fontSize:"14px",color:"#374151",marginBottom:"10px"}}>Remove the role <strong style={{textTransform:"capitalize"}}>{ROLE_LABELS[roleKey(delRole)]||delRole}</strong> from the list?</div>
+              {inUse>0&&<div style={{fontSize:"13px",color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"8px",padding:"10px 12px",marginBottom:"12px"}}>⚠️ {inUse} user{inUse===1?" is":"s are"} currently assigned this role. They keep their role, but you won't be able to pick it again for new users until you re-add it.</div>}
+              <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
+                <button onClick={()=>setDelRole(null)} style={{flex:1,padding:"11px",borderRadius:"9px",border:"1.5px solid #d1d5db",background:"#fff",color:"#475569",fontWeight:"700",cursor:"pointer",fontSize:"14px"}}>Cancel</button>
+                <button onClick={confirmDeleteRole} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:RD,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );})()}
     </div>
   );
 }
@@ -2147,6 +2216,7 @@ function ShareModal({subs,engineers,dashDate,reportFrom,reportTo,onClose,flash})
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App(){
+  const [splashDone,setSplashDone]=useState(false); // cinematic intro plays once on open
   const [loading,setLoading]=useState(true);
   const [gUser,setGUser]=useState(undefined);   // Google account: undefined=checking, null=signed out, obj=signed in
   const [authReady,setAuthReady]=useState(false);
@@ -2549,6 +2619,8 @@ export default function App(){
   },[activeProject]);
 
   const caps=user?(user.caps||ROLE_CAPS[roleKey(user.role)]||ROLE_CAPS.engineer):ROLE_CAPS.engineer;
+  // Cinematic intro overlays the very first paint while auth/data resolve in the background.
+  if(!splashDone)return <SplashScreen onDone={()=>setSplashDone(true)}/>;
   if(loading)return <div style={{padding:"5rem",textAlign:"center",color:"#6b7280",fontFamily:"sans-serif",fontSize:"16px"}}>Loading…</div>;
 
   // ── GOOGLE SIGN-IN GATE ──────────────────────────────────────────────
@@ -3117,7 +3189,7 @@ export default function App(){
 
         {/* SETTINGS */}
         {effectiveView==="globalSettings"&&(
-          <GlobalSettingsPanel globalLists={globalLists} setGlobalLists={setGlobalLists} flash={flash} mobile={mobile}/>
+          <GlobalSettingsPanel globalLists={globalLists} setGlobalLists={setGlobalLists} flash={flash} mobile={mobile} users={users}/>
         )}
 
         </div>
