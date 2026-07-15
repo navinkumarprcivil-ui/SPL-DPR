@@ -24,6 +24,32 @@
       @media (max-width: 767px){
         input, select, textarea{ font-size:16px !important; }
       }
+      /* ── Cinematic splash (plays once when the app opens) ── */
+      @keyframes splLogoIn{
+        0%{ opacity:0; transform:scale(.55) translateY(14px); filter:blur(10px); }
+        55%{ opacity:1; filter:blur(0); }
+        70%{ transform:scale(1.06) translateY(0); }
+        100%{ opacity:1; transform:scale(1) translateY(0); filter:blur(0); }
+      }
+      @keyframes splGlow{
+        0%,100%{ box-shadow:0 10px 40px rgba(0,0,0,.35), 0 0 0 rgba(245,158,11,0); }
+        60%{ box-shadow:0 10px 50px rgba(0,0,0,.4), 0 0 46px rgba(245,158,11,.55); }
+      }
+      @keyframes splRiseUp{
+        0%{ opacity:0; transform:translateY(16px); }
+        100%{ opacity:1; transform:translateY(0); }
+      }
+      @keyframes splRing{
+        0%{ opacity:.5; transform:scale(.7); }
+        100%{ opacity:0; transform:scale(1.9); }
+      }
+      @keyframes splFadeOut{
+        0%{ opacity:1; }
+        100%{ opacity:0; visibility:hidden; }
+      }
+      @media (prefers-reduced-motion: reduce){
+        #spl-splash *{ animation-duration:.001s !important; }
+      }
     </style>
     <script>
       // Clean up any legacy CACHES (old caching SWs served stale content), then
