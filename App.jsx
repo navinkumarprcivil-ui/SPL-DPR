@@ -1188,7 +1188,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                       </div>
                     )}
                     {/* Project assignment in edit mode — only for Specific access */}
-                    {ed.projectAccess!=="specific"?null:(roleKeyroleKey(ed.role||u.role)==="engineer"||roleKeyroleKey(ed.role||u.role)==="incharge")?(
+                    {ed.projectAccess!=="specific"?null:(roleKey(ed.role||u.role)==="engineer"||roleKey(ed.role||u.role)==="incharge")?(
                       <div style={{marginBottom:"12px"}}>
                         <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Project</div>
                         <select value={ed.assignedProjectId||""} onChange={e=>setEditData(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:"7px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff"}}>
