@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Component } from "react";
 import * as XLSX from "xlsx";
 import { db, auth, googleProvider } from './firebase';
 import { ref, set, update, remove, onValue, off } from 'firebase/database';
@@ -7,7 +7,7 @@ import { onAuthStateChanged, signInWithPopup, signOut as fbSignOut } from 'fireb
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const LOGO="data:image/jpeg;base64,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";
 const NV="#1e3a5f",AM="#f59e0b",GN="#16a34a",RD="#dc2626",PU="#6d28d9";
-const BUILD_TAG="v4 \u00b7 user activity log";
+const BUILD_TAG="v5 \u00b7 edit fix \u00b7 splash \u00b7 roles";
 const QUOTES=[
   {q:"Great works are performed not by strength, but by perseverance.",a:"Samuel Johnson"},
   {q:"The only way to do great work is to love what you do.",a:"Steve Jobs"},
@@ -2215,7 +2215,7 @@ function ShareModal({subs,engineers,dashDate,reportFrom,reportTo,onClose,flash})
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function App(){
+function App(){
   const [splashDone,setSplashDone]=useState(false); // cinematic intro plays once on open
   const [loading,setLoading]=useState(true);
   const [gUser,setGUser]=useState(undefined);   // Google account: undefined=checking, null=signed out, obj=signed in
@@ -2645,6 +2645,7 @@ export default function App(){
           Continue with Google
         </button>
         <div style={{fontSize:"12px",color:"rgba(255,255,255,.35)",marginTop:"18px"}}>Access is restricted to authorised SPL accounts</div>
+        <div style={{fontSize:"10px",color:"rgba(255,255,255,.25)",marginTop:"8px",letterSpacing:".03em"}}>{BUILD_TAG}</div>
       </div>
     </div>
   );
@@ -2998,6 +2999,7 @@ export default function App(){
             <i className="ti ti-lock-open" style={{fontSize:"20px"}} aria-hidden/>Sign In to Continue
           </button>
           <div style={{fontSize:"12px",color:"rgba(255,255,255,.35)",marginTop:"20px"}}>All data is synced in real-time across devices</div>
+          <div style={{fontSize:"10px",color:"rgba(255,255,255,.25)",marginTop:"8px",letterSpacing:".03em"}}>{BUILD_TAG}</div>
           <button onClick={handleGoogleSignOut} style={{marginTop:"14px",background:"none",border:"none",color:"rgba(255,255,255,.55)",fontSize:"12px",fontWeight:"600",cursor:"pointer",textDecoration:"underline",display:"inline-flex",alignItems:"center",gap:"6px"}}><i className="ti ti-logout" aria-hidden/>{gUser?.email?`Not ${gUser.email}? Switch Google account`:"Switch Google account"}</button>
         </div>
       </div>
@@ -4036,4 +4038,42 @@ export default function App(){
       {shareOpen&&<ShareModal subs={roleKey(user?.role)==="engineer"||roleKey(user?.role)==="incharge"?getReportSubs():subs} engineers={engineers} dashDate={dashDate} reportFrom={reportFrom} reportTo={reportTo} onClose={()=>setShareOpen(false)} flash={flash}/>}
     </div>
   );
+}
+
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+// Catches any render error so a crash shows a recoverable message with the real
+// error text instead of a blank white screen. The reload button also clears any
+// stale service-worker caches, which fixes "still crashing after an update".
+class ErrorBoundary extends Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(err){return {err};}
+  componentDidCatch(err,info){console.error("App crashed:",err,info);}
+  async hardReload(){
+    try{
+      if('serviceWorker' in navigator){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));}
+      if('caches' in window){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}
+    }catch(e){/* ignore */}
+    location.reload();
+  }
+  render(){
+    if(!this.state.err)return this.props.children;
+    const msg=(this.state.err&&(this.state.err.message||String(this.state.err)))||"Unknown error";
+    return(
+      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",background:"#f8fafc",fontFamily:"var(--font-sans)"}}>
+        <div style={{maxWidth:"440px",width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:"16px",padding:"28px",textAlign:"center",boxShadow:"0 10px 40px rgba(0,0,0,.08)"}}>
+          <div style={{fontSize:"44px",marginBottom:"12px"}}>⚠️</div>
+          <div style={{fontWeight:"800",fontSize:"18px",color:"#991b1b",marginBottom:"8px"}}>Something went wrong</div>
+          <div style={{fontSize:"13px",color:"#6b7280",lineHeight:"1.6",marginBottom:"16px"}}>The app hit an error. Reloading with a fresh copy usually fixes it. If it keeps happening, please screenshot the details below and share them.</div>
+          <div style={{fontFamily:"monospace",fontSize:"11px",color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"8px",padding:"10px 12px",marginBottom:"18px",textAlign:"left",wordBreak:"break-word",maxHeight:"140px",overflow:"auto"}}>{msg}</div>
+          <button onClick={()=>this.hardReload()} style={{width:"100%",padding:"13px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"15px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
+            <i className="ti ti-refresh" aria-hidden/>Reload &amp; clear cache
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default function AppRoot(){
+  return <ErrorBoundary><App/></ErrorBoundary>;
 }
