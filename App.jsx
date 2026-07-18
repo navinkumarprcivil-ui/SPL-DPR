@@ -956,10 +956,12 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     const id=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     rtdbPut('userAudit/'+id,{id,ts:new Date().toISOString(),actor:user?.name||"Admin",action,target,detail:detail||""}).catch(()=>{});
   }
+  const [tab,setTab]=useState("view"); // create | view | logs
   const [search,setSearch]=useState("");
   const [roleFilter,setRoleFilter]=useState("all");
   const [projFilter,setProjFilter]=useState("all");
   const [groupBy,setGroupBy]=useState("none");
+  const [sortBy,setSortBy]=useState("name"); // name | role | project | perms
   const [delUser,setDelUser]=useState(null);
   const [delCode,setDelCode]=useState("");
   const [delInput,setDelInput]=useState("");
@@ -1065,7 +1067,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
 
   const projName=u=>{if(u.projectAccess==="all")return"All projects";const s=projects.find(p=>p.id===u.assignedProjectId);const m=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);return s?s.name:m.length?m.map(p=>p.name).join(", "):"";};
   const q=search.trim().toLowerCase();
-  const filtered=users.filter(u=>{
+  const filteredRaw=users.filter(u=>{
     if(q&&!((u.name||"").toLowerCase().includes(q)||(u.role||"").toLowerCase().includes(q)||projName(u).toLowerCase().includes(q)))return false;
     if(roleFilter!=="all"&&roleKey(u.role)!==roleKey(roleFilter))return false;
     if(projFilter!=="all"){
@@ -1074,6 +1076,19 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     }
     return true;
   });
+  // Sorting — applied to the flat list and within each group
+  const ROLE_ORDER={admin:0,management:1,incharge:2,engineer:3};
+  const permCount=u=>{const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;return PERMS.reduce((n,[k])=>n+(uc[k]?1:0),0);};
+  const byName=(a,b)=>(a.name||"").localeCompare(b.name||"",undefined,{sensitivity:"base"});
+  const sortUsers=arr=>{
+    const s=arr.slice();
+    if(sortBy==="name")s.sort(byName);
+    else if(sortBy==="role")s.sort((a,b)=>{const ra=ROLE_ORDER[roleKey(a.role)]??99,rb=ROLE_ORDER[roleKey(b.role)]??99;return ra!==rb?ra-rb:byName(a,b);});
+    else if(sortBy==="project")s.sort((a,b)=>{const pa=projName(a)||"~",pb=projName(b)||"~";return pa!==pb?pa.localeCompare(pb,undefined,{sensitivity:"base"}):byName(a,b);});
+    else if(sortBy==="perms")s.sort((a,b)=>{const d=permCount(b)-permCount(a);return d!==0?d:byName(a,b);});
+    return s;
+  };
+  const filtered=sortUsers(filteredRaw);
   let groups=[];
   if(groupBy==="none")groups=[{key:"all",title:"",show:false,users:filtered}];
   else if(groupBy==="role"){
@@ -1083,9 +1098,21 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     projects.forEach(p=>{const us=filtered.filter(u=>u.projectAccess==="all"||u.assignedProjectId===p.id||toArr(u.assignedProjectIds).includes(p.id));if(us.length)groups.push({key:p.id,title:p.name,show:true,users:us});});
     const un=filtered.filter(u=>u.projectAccess!=="all"&&!u.assignedProjectId&&!toArr(u.assignedProjectIds).length);if(un.length)groups.push({key:"un",title:"Unassigned",show:true,users:un});
   }
+  const TABS=[["view","Users","ti-users"],["create","Create User","ti-user-plus"],["logs","Activity Log","ti-history"]];
   return(
     <div style={{padding:mobile?"8px":"20px",maxWidth:"960px",margin:"0 auto"}}>
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:"6px",marginBottom:"14px",background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"6px"}}>
+        {TABS.map(([v,l,ic])=>{
+          const on=tab===v;
+          return(<button key={v} onClick={()=>setTab(v)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",padding:mobile?"11px 6px":"11px 14px",borderRadius:"9px",border:"none",cursor:"pointer",fontSize:mobile?"12px":"14px",fontWeight:"700",background:on?NV:"transparent",color:on?"#fff":"#64748b"}}>
+            <i className={"ti "+ic} style={{fontSize:"16px"}} aria-hidden/>{l}{v==="logs"&&userAudit.length>0&&<span style={{fontSize:"10px",fontWeight:"800",background:on?"rgba(255,255,255,.25)":"#eef2f7",color:on?"#fff":"#64748b",borderRadius:"20px",padding:"1px 7px"}}>{userAudit.length}</span>}
+          </button>);
+        })}
+      </div>
+
       {/* Create User */}
+      {tab==="create"&&(
       <Card style={{marginBottom:"14px",borderTop:`4px solid ${NV}`}}>
         <div style={{...SH2,marginBottom:"16px"}}><span>Create User Account</span></div>
         <Grid cols={mobile?"1fr":"1fr 1fr 1fr"}>
@@ -1155,8 +1182,10 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           <button onClick={tryCreate} style={{flex:1,padding:"13px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"15px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}><i className="ti ti-eye" aria-hidden/>Preview &amp; confirm</button>
         </div>
       </Card>
+      )}
 
       {/* All Users */}
+      {tab==="view"&&(
       <Card>
         <div style={{...SH2,marginBottom:"14px"}}><span>All Users ({filtered.length}{filtered.length!==users.length?" of "+users.length:""})</span><button onClick={downloadUsersPDF} style={{padding:"6px 14px",borderRadius:"7px",border:"none",background:"#dc2626",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><i className="ti ti-file-type-pdf" aria-hidden/>Download PDF</button></div>
         {/* Toolbar: search, filters, group-by */}
@@ -1175,6 +1204,15 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
             {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             <option value="unassigned">Unassigned</option>
           </select>
+          <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+            <span style={{fontSize:"12px",color:"#94a3b8",fontWeight:"700"}}>Sort</span>
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"10px 12px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff",fontWeight:"600",color:"#334155"}}>
+              <option value="name">Name (A–Z)</option>
+              <option value="role">Role</option>
+              <option value="project">Project</option>
+              <option value="perms">Permissions</option>
+            </select>
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <span style={{fontSize:"12px",color:"#94a3b8",fontWeight:"700"}}>Group</span>
             <div style={{display:"flex",border:"1.5px solid #d1d5db",borderRadius:"8px",overflow:"hidden",background:"#fff"}}>
@@ -1312,15 +1350,16 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           {filtered.length===0&&(<div style={{textAlign:"center",padding:"44px 20px",color:"#9ca3af",fontSize:"14px"}}><i className="ti ti-user-search" style={{fontSize:"28px",display:"block",marginBottom:"8px"}} aria-hidden/>No users match your filters.</div>)}
         </div>
       </Card>
+      )}
 
       {/* User Activity Log */}
-      <Card style={{marginTop:"14px"}}>
-        <button onClick={()=>setShowLog(s=>!s)} style={{width:"100%",display:"flex",alignItems:"center",gap:"9px",border:"none",background:"transparent",cursor:"pointer",padding:0,textAlign:"left"}}>
+      {tab==="logs"&&(
+      <Card>
+        <div style={{display:"flex",alignItems:"center",gap:"9px",marginBottom:"4px"}}>
           <i className="ti ti-history" style={{fontSize:"17px",color:NV}} aria-hidden/>
           <span style={{fontWeight:"800",fontSize:"15px",color:NV,flex:1}}>User Activity Log <span style={{fontWeight:"600",color:"#94a3b8",fontSize:"12px"}}>({userAudit.length})</span></span>
-          <i className={"ti "+(showLog?"ti-chevron-up":"ti-chevron-down")} style={{color:"#94a3b8"}} aria-hidden/>
-        </button>
-        {showLog&&(
+        </div>
+        {(
           <div style={{marginTop:"12px",display:"flex",flexDirection:"column"}}>
             {userAudit.length===0&&<div style={{fontSize:"13px",color:"#9ca3af",padding:"10px 0"}}>No user changes recorded yet. Creations, updates, transfers and deletions will appear here.</div>}
             {userAudit.slice(0,50).map((e,i)=>{
@@ -1339,6 +1378,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           </div>
         )}
       </Card>
+      )}
 
       {/* Coded delete confirmation */}
       {delUser&&(
@@ -1448,7 +1488,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
               )}
               <div style={{display:"flex",gap:"10px",marginTop:"18px"}}>
                 <button onClick={()=>setShowCreatePreview(false)} style={{flex:1,padding:"11px",borderRadius:"9px",border:"1.5px solid #d1d5db",background:"#fff",color:"#475569",fontWeight:"700",cursor:"pointer",fontSize:"14px"}}>Back to edit</button>
-                <button onClick={()=>{if(newUsr.name.trim()&&newUsr.pin.trim()){const pn=projects.find(p=>p.id===newUsr.assignedProjectId)?.name;logUserAudit("created",newUsr.name.trim(),"Role: "+newUsr.role+(access==="all"?" \u00b7 All projects":pn?" \u00b7 Project: "+pn:""));}addUser();setShowCreatePreview(false);}} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:GN,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Confirm &amp; Create</button>
+                <button onClick={()=>{if(newUsr.name.trim()&&newUsr.pin.trim()){const pn=projects.find(p=>p.id===newUsr.assignedProjectId)?.name;logUserAudit("created",newUsr.name.trim(),"Role: "+newUsr.role+(access==="all"?" \u00b7 All projects":pn?" \u00b7 Project: "+pn:""));}addUser();setShowCreatePreview(false);setTab("view");}} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:GN,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Confirm &amp; Create</button>
               </div>
             </div>
           </div>
