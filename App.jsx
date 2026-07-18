@@ -1888,35 +1888,70 @@ function PerformanceScreen({users,projects,mobile,globalLists}){
 
   const starStart=Number(globalLists.starStart??5);
   const subs=allSubs||[];
+  const apvDays=Number(globalLists.dprApprovalDays??0);
   const isLateSub=s=>s.date!==((s.submittedAt||"").slice(0,10)||s.date);
-  const people=users.filter(u=>roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge").map(u=>{
-    const mine=roleKey(u.role)==="engineer"?subs.filter(s=>s.engineer===u.name):subs.filter(s=>s.incharge===u.name);
-    const late=mine.filter(isLateSub).length;
-    return{ id:u.id, name:u.name, role:u.role, stars:u.stars!=null?Number(u.stars):starStart, subs:mine.length, late, ontime:mine.length-late };
-  }).sort((a,b)=>b.stars-a.stars);
+  // A "check" (approval) is late if it happened more than the approval window after the DPR date.
+  const isLateCheck=s=>{ if(!s.approved||!apvDays)return false; const ad=(s.approvedAt||"").slice(0,10); if(!ad)return false; const age=Math.floor((new Date(ad)-new Date(s.date))/86400000); return age>apvDays; };
+  const checkedBy=(s,name)=>s.approved&&(s.approvedBy===name||(!s.approvedBy&&s.incharge===name));
+
+  // Performance is activity-based, not role-based: include anyone who FILLS DPRs
+  // (or can) and anyone who CHECKS/approves DPRs (or can). One person can do both.
+  const people=users.filter(u=>{
+    const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
+    const filledAny=subs.some(s=>s.engineer===u.name);
+    const checkedAny=subs.some(s=>checkedBy(s,u.name));
+    return roleKey(u.role)!=="admin"&&(uc.fill||uc.approve||filledAny||checkedAny);
+  }).map(u=>{
+    const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
+    const filled=subs.filter(s=>s.engineer===u.name);
+    const checked=subs.filter(s=>checkedBy(s,u.name));
+    const filledLate=filled.filter(isLateSub).length;
+    const checkedLate=checked.filter(isLateCheck).length;
+    return{
+      id:u.id, name:u.name, role:u.role,
+      stars:u.stars!=null?Number(u.stars):starStart,
+      isFiller:uc.fill||filled.length>0, isChecker:uc.approve||checked.length>0,
+      filled:filled.length, filledLate, filledOntime:filled.length-filledLate,
+      checked:checked.length, checkedLate, checkedOntime:checked.length-checkedLate,
+    };
+  }).sort((a,b)=>b.stars-a.stars||(b.filled+b.checked)-(a.filled+a.checked));
+
+  const gridCols=mobile?"26px 1fr 58px 66px 66px":"40px 1.5fr 1fr 0.9fr 1.1fr 1.1fr";
+  const ActCell=({total,ontime,late,show})=> !show?(<div style={{textAlign:"center",color:"#cbd5e1",fontSize:"12px"}}>—</div>):(
+    <div style={{textAlign:"center",lineHeight:1.2}}>
+      <div style={{fontWeight:"800",color:"#0f172a",fontSize:"14px"}}>{total}</div>
+      <div style={{fontSize:"10px",fontWeight:"700"}}><span style={{color:GN}}>{ontime}✓</span>{late>0&&<span style={{color:RD}}> · {late} late</span>}</div>
+    </div>
+  );
 
   return(
     <div style={{padding:mobile?"12px":"20px",maxWidth:"1100px",margin:"0 auto"}}>
       <div style={{fontWeight:"800",fontSize:mobile?"19px":"22px",color:NV,marginBottom:"3px"}}>⭐ Performance</div>
-      <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"16px"}}>Engineer &amp; incharge ratings based on on-time submission</div>
+      <div style={{fontSize:"13px",color:"#6b7280",marginBottom:"16px"}}>Ratings for everyone who fills DPRs and everyone who checks (approves) them</div>
       <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"10px",padding:"13px 16px",marginBottom:"18px",fontSize:"13px",color:"#92400e",lineHeight:"1.5"}}>
-        <i className="ti ti-star-filled" style={{color:"#f59e0b"}} aria-hidden/> Everyone starts at <strong>{starStart}★</strong>. A late submission deducts <strong>{globalLists.lateEngDeduct??0.5}★</strong> from the engineer and <strong>{globalLists.lateInchargeDeduct??0.25}★</strong> from their incharge. Configurable in Settings.
+        <i className="ti ti-star-filled" style={{color:"#f59e0b"}} aria-hidden/> Everyone starts at <strong>{starStart}★</strong>. A late DPR deducts <strong>{globalLists.lateEngDeduct??0.5}★</strong> from whoever filled it and <strong>{globalLists.lateInchargeDeduct??0.25}★</strong> from the incharge who checks it{apvDays>0?<> — a check is counted late when it lands more than <strong>{apvDays} day{apvDays===1?"":"s"}</strong> after the DPR date</>:""}. Configurable in Settings.
       </div>
       {loading&&<div style={{fontSize:"13px",color:"#9ca3af",padding:"20px 0"}}>Loading submission history…</div>}
       {!loading&&(
         <Card style={{padding:0,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:mobile?"32px 1fr 70px 60px 60px":"40px 1.6fr 1.2fr 1fr 90px 80px",gap:"10px",padding:mobile?"10px 12px":"11px 16px",background:"#f8fafc",borderBottom:"1px solid #e5e7eb",fontSize:"10px",fontWeight:"800",color:"#6b7280",textTransform:"uppercase"}}>
-            <div>#</div><div>Name</div>{!mobile&&<div>Role</div>}<div>Stars</div><div style={{textAlign:"center"}}>On-time</div><div style={{textAlign:"center"}}>Late</div>
+          <div style={{display:"grid",gridTemplateColumns:gridCols,gap:"10px",padding:mobile?"10px 12px":"11px 16px",background:"#f8fafc",borderBottom:"1px solid #e5e7eb",fontSize:"10px",fontWeight:"800",color:"#6b7280",textTransform:"uppercase"}}>
+            <div>#</div><div>Name</div>{!mobile&&<div>Role</div>}<div>Stars</div><div style={{textAlign:"center"}}>Filled</div><div style={{textAlign:"center"}}>Checked</div>
           </div>
-          {people.length===0&&<div style={{padding:"30px",textAlign:"center",color:"#9ca3af",fontSize:"13px"}}>No engineers or incharges yet.</div>}
+          {people.length===0&&<div style={{padding:"30px",textAlign:"center",color:"#9ca3af",fontSize:"13px"}}>No DPR activity yet.</div>}
           {people.map((p,i)=>(
-            <div key={p.id} style={{display:"grid",gridTemplateColumns:mobile?"32px 1fr 70px 60px 60px":"40px 1.6fr 1.2fr 1fr 90px 80px",gap:"10px",padding:mobile?"10px 12px":"13px 16px",borderBottom:"1px solid #f1f5f9",alignItems:"center",fontSize:"13px"}}>
+            <div key={p.id} style={{display:"grid",gridTemplateColumns:gridCols,gap:"10px",padding:mobile?"10px 12px":"13px 16px",borderBottom:"1px solid #f1f5f9",alignItems:"center",fontSize:"13px"}}>
               <div style={{fontWeight:"800",color:i===0?AM:"#94a3b8"}}>{i+1}</div>
-              <div style={{fontWeight:"700",color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+              <div style={{minWidth:0}}>
+                <div style={{fontWeight:"700",color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                <div style={{display:"flex",gap:"4px",marginTop:"2px"}}>
+                  {p.isFiller&&<span style={{fontSize:"9px",fontWeight:"800",color:"#1d4ed8",background:"#eff6ff",borderRadius:"20px",padding:"1px 6px"}}>Fills</span>}
+                  {p.isChecker&&<span style={{fontSize:"9px",fontWeight:"800",color:"#166534",background:"#f0fdf4",borderRadius:"20px",padding:"1px 6px"}}>Checks</span>}
+                </div>
+              </div>
               {!mobile&&<div><RoleB role={p.role}/></div>}
               <div style={{fontWeight:"800",color:"#475569",display:"flex",alignItems:"center",gap:"3px"}}><i className="ti ti-star-filled" style={{fontSize:"13px",color:"#f59e0b"}} aria-hidden/>{p.stars.toFixed(2)}</div>
-              <div style={{textAlign:"center",fontWeight:"700",color:GN}}>{p.ontime}</div>
-              <div style={{textAlign:"center",fontWeight:"700",color:p.late>0?RD:"#cbd5e1"}}>{p.late}</div>
+              <ActCell total={p.filled} ontime={p.filledOntime} late={p.filledLate} show={p.isFiller}/>
+              <ActCell total={p.checked} ontime={p.checkedOntime} late={p.checkedLate} show={p.isChecker}/>
             </div>
           ))}
         </Card>
