@@ -110,6 +110,10 @@ const DEFAULT_WT=["C&G","BT Dismantling","WBM Dismantling","Excavation","Embankm
 const ROLE_CAPS={engineer:{fill:true,approve:false,download:false,manage:false,settings:false,users:false},incharge:{fill:true,approve:true,download:false,manage:false,settings:false,users:false},management:{fill:false,approve:true,download:true,manage:true,settings:false,users:false},admin:{fill:true,approve:true,download:true,manage:true,settings:true,users:true}};
 const ROLE_LABELS={engineer:"Engineer",incharge:"Incharge",management:"Management",admin:"Admin"};
 const roleKey=r=>(r||"").trim().toLowerCase();
+// A user's explicit project set (single assignedProjectId + multi assignedProjectIds), de-duped.
+const userProjectIds=u=>[...new Set([u&&u.assignedProjectId,...(u?toArr(u.assignedProjectIds):[])].filter(Boolean))];
+// Is this user explicitly assigned to project pid? (does not count "all" access)
+const userAssignedTo=(u,pid)=>userProjectIds(u).includes(pid);
 const isSuperAdminUser=u=>!!u&&(u.id==="superadmin"||(roleKey(u.role)==="admin"&&(u.name||"").trim().toLowerCase()==="super admin"));
 const fmtTs=ts=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+", "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true}).toLowerCase();};
 const WEATHER_OPTS=["☀️ Clear","🌤️ Partly Cloudy","☁️ Overcast","🌦️ Light Rain","🌧️ Heavy Rain","🌫️ Fog","🌡️ Extreme Heat"];
@@ -952,10 +956,12 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     const id=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     rtdbPut('userAudit/'+id,{id,ts:new Date().toISOString(),actor:user?.name||"Admin",action,target,detail:detail||""}).catch(()=>{});
   }
+  const [tab,setTab]=useState("view"); // create | view | logs
   const [search,setSearch]=useState("");
   const [roleFilter,setRoleFilter]=useState("all");
   const [projFilter,setProjFilter]=useState("all");
   const [groupBy,setGroupBy]=useState("none");
+  const [sortBy,setSortBy]=useState("name"); // name | role | project | perms
   const [delUser,setDelUser]=useState(null);
   const [delCode,setDelCode]=useState("");
   const [delInput,setDelInput]=useState("");
@@ -1061,7 +1067,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
 
   const projName=u=>{if(u.projectAccess==="all")return"All projects";const s=projects.find(p=>p.id===u.assignedProjectId);const m=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);return s?s.name:m.length?m.map(p=>p.name).join(", "):"";};
   const q=search.trim().toLowerCase();
-  const filtered=users.filter(u=>{
+  const filteredRaw=users.filter(u=>{
     if(q&&!((u.name||"").toLowerCase().includes(q)||(u.role||"").toLowerCase().includes(q)||projName(u).toLowerCase().includes(q)))return false;
     if(roleFilter!=="all"&&roleKey(u.role)!==roleKey(roleFilter))return false;
     if(projFilter!=="all"){
@@ -1070,6 +1076,19 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     }
     return true;
   });
+  // Sorting — applied to the flat list and within each group
+  const ROLE_ORDER={admin:0,management:1,incharge:2,engineer:3};
+  const permCount=u=>{const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;return PERMS.reduce((n,[k])=>n+(uc[k]?1:0),0);};
+  const byName=(a,b)=>(a.name||"").localeCompare(b.name||"",undefined,{sensitivity:"base"});
+  const sortUsers=arr=>{
+    const s=arr.slice();
+    if(sortBy==="name")s.sort(byName);
+    else if(sortBy==="role")s.sort((a,b)=>{const ra=ROLE_ORDER[roleKey(a.role)]??99,rb=ROLE_ORDER[roleKey(b.role)]??99;return ra!==rb?ra-rb:byName(a,b);});
+    else if(sortBy==="project")s.sort((a,b)=>{const pa=projName(a)||"~",pb=projName(b)||"~";return pa!==pb?pa.localeCompare(pb,undefined,{sensitivity:"base"}):byName(a,b);});
+    else if(sortBy==="perms")s.sort((a,b)=>{const d=permCount(b)-permCount(a);return d!==0?d:byName(a,b);});
+    return s;
+  };
+  const filtered=sortUsers(filteredRaw);
   let groups=[];
   if(groupBy==="none")groups=[{key:"all",title:"",show:false,users:filtered}];
   else if(groupBy==="role"){
@@ -1079,9 +1098,21 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     projects.forEach(p=>{const us=filtered.filter(u=>u.projectAccess==="all"||u.assignedProjectId===p.id||toArr(u.assignedProjectIds).includes(p.id));if(us.length)groups.push({key:p.id,title:p.name,show:true,users:us});});
     const un=filtered.filter(u=>u.projectAccess!=="all"&&!u.assignedProjectId&&!toArr(u.assignedProjectIds).length);if(un.length)groups.push({key:"un",title:"Unassigned",show:true,users:un});
   }
+  const TABS=[["view","Users","ti-users"],["create","Create User","ti-user-plus"],["logs","Activity Log","ti-history"]];
   return(
     <div style={{padding:mobile?"8px":"20px",maxWidth:"960px",margin:"0 auto"}}>
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:"6px",marginBottom:"14px",background:"#fff",border:"1px solid #e5e7eb",borderRadius:"12px",padding:"6px"}}>
+        {TABS.map(([v,l,ic])=>{
+          const on=tab===v;
+          return(<button key={v} onClick={()=>setTab(v)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"7px",padding:mobile?"11px 6px":"11px 14px",borderRadius:"9px",border:"none",cursor:"pointer",fontSize:mobile?"12px":"14px",fontWeight:"700",background:on?NV:"transparent",color:on?"#fff":"#64748b"}}>
+            <i className={"ti "+ic} style={{fontSize:"16px"}} aria-hidden/>{l}{v==="logs"&&userAudit.length>0&&<span style={{fontSize:"10px",fontWeight:"800",background:on?"rgba(255,255,255,.25)":"#eef2f7",color:on?"#fff":"#64748b",borderRadius:"20px",padding:"1px 7px"}}>{userAudit.length}</span>}
+          </button>);
+        })}
+      </div>
+
       {/* Create User */}
+      {tab==="create"&&(
       <Card style={{marginBottom:"14px",borderTop:`4px solid ${NV}`}}>
         <div style={{...SH2,marginBottom:"16px"}}><span>Create User Account</span></div>
         <Grid cols={mobile?"1fr":"1fr 1fr 1fr"}>
@@ -1114,28 +1145,25 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           {newUsr.projectAccess==="all"&&(
             <div style={{marginTop:"10px",fontSize:"12px",color:"#166534",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:"7px",padding:"9px 12px"}}>✅ This user will have access to all current and future projects.</div>
           )}
-          {newUsr.projectAccess==="specific"&&((roleKey(newUsr.role)==="engineer"||roleKey(newUsr.role)==="incharge")?(
+          {newUsr.projectAccess==="specific"&&(()=>{
+            const single=roleKey(newUsr.role)==="engineer"||roleKey(newUsr.role)==="incharge";
+            const sel=toArr(newUsr.assignedProjectIds);
+            return(
             <div style={{marginTop:"10px"}}>
-              <div style={{fontWeight:"700",fontSize:"12px",color:"#0369a1",marginBottom:"8px"}}>📍 Assign to Project <span style={{fontWeight:"400"}}>(one project only)</span></div>
-              <select value={newUsr.assignedProjectId||""} onChange={e=>setNewUsr(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:"8px",border:"1.5px solid #7dd3fc",fontSize:"14px",background:"#fff"}}>
-                <option value="">— No project yet —</option>
-                {projects.map(p=><option key={p.id} value={p.id}>{p.name}{p.code?" ("+p.code+")":""}</option>)}
-              </select>
-            </div>
-          ):(
-            <div style={{marginTop:"10px"}}>
-              <div style={{fontWeight:"700",fontSize:"12px",color:"#166534",marginBottom:"8px"}}>📍 Assign to Projects <span style={{fontWeight:"400"}}>(can have multiple)</span></div>
+              <div style={{fontWeight:"700",fontSize:"12px",color:"#166534",marginBottom:"8px"}}>📍 Assign to Projects <span style={{fontWeight:"400"}}>({single?"usually one — multiple allowed":"can have multiple"})</span></div>
               <div style={{display:"flex",flexWrap:"wrap",gap:"8px"}}>
                 {projects.map(p=>{
-                  const checked=(newUsr.assignedProjectIds||[]).includes(p.id);
+                  const checked=sel.includes(p.id);
                   return(<label key={p.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"7px",border:`1.5px solid ${checked?"#22c55e":"#d1d5db"}`,background:checked?"#f0fdf4":"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>
-                    <input type="checkbox" checked={checked} onChange={e=>{const cur=newUsr.assignedProjectIds||[];const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setNewUsr(pp=>({...pp,assignedProjectIds:next,assignedProjectId:next[0]||""}));}} style={{accentColor:"#22c55e"}}/>
-                    {p.name}
+                    <input type="checkbox" checked={checked} onChange={e=>{const next=e.target.checked?[...sel,p.id]:sel.filter(x=>x!==p.id);setNewUsr(pp=>({...pp,assignedProjectIds:next,assignedProjectId:next[0]||""}));if(e.target.checked&&next.length>1)flash("⚠️ "+(single?"This role usually has one project — you've selected "+next.length:"Selected "+next.length+" projects"),"ok");}} style={{accentColor:"#22c55e"}}/>
+                    {p.name}{p.code?" ("+p.code+")":""}
                   </label>);
                 })}
               </div>
+              {sel.length>1&&<div style={{marginTop:"8px",fontSize:"11px",color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"6px",padding:"7px 10px"}}>⚠️ {sel.length} projects selected. This user will have access to all of them.</div>}
             </div>
-          ))}
+            );
+          })()}
         </div>
         {/* Permissions */}
         <div style={{marginTop:"12px",padding:"12px",background:"#f8fafc",borderRadius:"8px",border:"1px solid #e5e7eb"}}>
@@ -1154,15 +1182,18 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           <button onClick={tryCreate} style={{flex:1,padding:"13px",borderRadius:"10px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"15px",fontWeight:"800",display:"flex",alignItems:"center",justifyContent:"center",gap:"7px"}}><i className="ti ti-eye" aria-hidden/>Preview &amp; confirm</button>
         </div>
       </Card>
+      )}
 
       {/* All Users */}
+      {tab==="view"&&(
       <Card>
         <div style={{...SH2,marginBottom:"14px"}}><span>All Users ({filtered.length}{filtered.length!==users.length?" of "+users.length:""})</span><button onClick={downloadUsersPDF} style={{padding:"6px 14px",borderRadius:"7px",border:"none",background:"#dc2626",color:"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"5px"}}><i className="ti ti-file-type-pdf" aria-hidden/>Download PDF</button></div>
         {/* Toolbar: search, filters, group-by */}
         <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",marginBottom:"16px"}}>
           <div style={{position:"relative",flex:1,minWidth:"200px"}}>
             <i className="ti ti-search" style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:"15px"}} aria-hidden/>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name, role or project\u2026" style={{width:"100%",boxSizing:"border-box",padding:"10px 12px 10px 34px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px"}}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name, role or project\u2026" style={{width:"100%",boxSizing:"border-box",padding:search?"10px 38px 10px 34px":"10px 12px 10px 34px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px"}}/>
+            {search&&<button onClick={()=>setSearch("")} aria-label="Clear search" title="Clear" style={{position:"absolute",right:"8px",top:"50%",transform:"translateY(-50%)",width:"24px",height:"24px",borderRadius:"6px",border:"none",background:"#f1f5f9",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"13px"}}><i className="ti ti-x" aria-hidden/></button>}
           </div>
           <select value={roleFilter} onChange={e=>setRoleFilter(e.target.value)} style={{padding:"10px 12px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff",fontWeight:"600",color:"#334155"}}>
             <option value="all">All roles</option>
@@ -1173,6 +1204,15 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
             {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             <option value="unassigned">Unassigned</option>
           </select>
+          <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+            <span style={{fontSize:"12px",color:"#94a3b8",fontWeight:"700"}}>Sort</span>
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"10px 12px",borderRadius:"9px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff",fontWeight:"600",color:"#334155"}}>
+              <option value="name">Name (A–Z)</option>
+              <option value="role">Role</option>
+              <option value="project">Project</option>
+              <option value="perms">Permissions</option>
+            </select>
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <span style={{fontSize:"12px",color:"#94a3b8",fontWeight:"700"}}>Group</span>
             <div style={{display:"flex",border:"1.5px solid #d1d5db",borderRadius:"8px",overflow:"hidden",background:"#fff"}}>
@@ -1191,8 +1231,10 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
             const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
             const isEditing=editId===u.id;
             const ed=isEditing?editData:{};
-            const assignedProj=projects.find(p=>p.id===u.assignedProjectId);
-            const mgmtProjs=toArr(u.assignedProjectIds).map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);
+            // Unified, de-duped list of this user's specific projects (assignedProjectId + assignedProjectIds)
+            const projIdSet=[...new Set([u.assignedProjectId,...toArr(u.assignedProjectIds)].filter(Boolean))];
+            const userProjs=projIdSet.map(pid=>projects.find(p=>p.id===pid)).filter(Boolean);
+            const hasNoProject=projIdSet.length===0;
             return(
               <div key={u.id} style={{border:`2px solid ${isEditing?AM:"#e5e7eb"}`,borderRadius:"12px",overflow:"hidden"}}>
                 {/* Header row */}
@@ -1211,9 +1253,8 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                         </select>
                       ):<RoleB role={u.role}/>}
                       {!isEditing&&u.projectAccess==="all"&&<span style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🌐 All projects</span>}
-                      {!isEditing&&u.projectAccess!=="all"&&assignedProj&&<span style={{fontSize:"11px",color:"#6b7280",background:"#f3f4f6",padding:"2px 8px",borderRadius:"6px"}}>📍 {assignedProj.name}</span>}
-                      {!isEditing&&u.projectAccess!=="all"&&mgmtProjs.length>0&&mgmtProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
-                      {!isEditing&&u.projectAccess!=="all"&&(roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge")&&!u.assignedProjectId&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
+                      {!isEditing&&u.projectAccess!=="all"&&userProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
+                      {!isEditing&&u.projectAccess!=="all"&&(roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge")&&hasNoProject&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
                     </div>
                     {!isEditing&&u.desc&&<div style={{fontSize:"12px",color:"#6b7280",marginTop:"4px"}}>{u.desc}</div>}
                   </div>
@@ -1256,29 +1297,26 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                         <Inp type="tel" value={ed.phone!==undefined?ed.phone:u.phone||""} onChange={e=>setEditData(p=>({...p,phone:e.target.value}))} placeholder="919876543210" style={{maxWidth:"220px"}}/>
                       </div>
                     )}
-                    {/* Project assignment in edit mode — only for Specific access */}
-                    {ed.projectAccess!=="specific"?null:(roleKey(ed.role||u.role)==="engineer"||roleKey(ed.role||u.role)==="incharge")?(
+                    {/* Project assignment in edit mode — multi-select for every role under Specific */}
+                    {ed.projectAccess==="specific"&&(()=>{
+                      const single=roleKey(ed.role||u.role)==="engineer"||roleKey(ed.role||u.role)==="incharge";
+                      const sel=toArr(ed.assignedProjectIds!==undefined?ed.assignedProjectIds:u.assignedProjectIds);
+                      return(
                       <div style={{marginBottom:"12px"}}>
-                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Project</div>
-                        <select value={ed.assignedProjectId||""} onChange={e=>setEditData(p=>({...p,assignedProjectId:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:"7px",border:"1.5px solid #d1d5db",fontSize:"14px",background:"#fff"}}>
-                          <option value="">— No project —</option>
-                          {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                      </div>
-                    ):(
-                      <div style={{marginBottom:"12px"}}>
-                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Projects <span style={{fontWeight:"400",color:"#9ca3af"}}>(can have multiple)</span></div>
+                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Assigned Projects <span style={{fontWeight:"400",color:"#9ca3af"}}>({single?"usually one — multiple allowed":"can have multiple"})</span></div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                           {projects.map(p=>{
-                            const checked=toArr(ed.assignedProjectIds||u.assignedProjectIds).includes(p.id);
+                            const checked=sel.includes(p.id);
                             return(<label key={p.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"6px 10px",borderRadius:"6px",border:`1.5px solid ${checked?"#22c55e":"#d1d5db"}`,background:checked?"#f0fdf4":"#fff",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
-                              <input type="checkbox" checked={checked} onChange={e=>{const cur=toArr(ed.assignedProjectIds||u.assignedProjectIds);const next=e.target.checked?[...cur,p.id]:cur.filter(x=>x!==p.id);setEditData(pp=>({...pp,assignedProjectIds:next,assignedProjectId:next[0]||""}));if(e.target.checked&&next.length>1)flash("⚠️ Assigning to "+next.length+" projects","ok");}} style={{accentColor:"#22c55e"}}/>
-                              {p.name}
+                              <input type="checkbox" checked={checked} onChange={e=>{const next=e.target.checked?[...sel,p.id]:sel.filter(x=>x!==p.id);setEditData(pp=>({...pp,assignedProjectIds:next,assignedProjectId:next[0]||""}));if(e.target.checked&&next.length>1)flash("⚠️ "+(single?"This role usually has one project — you've selected "+next.length:"Assigning to "+next.length+" projects"),"ok");}} style={{accentColor:"#22c55e"}}/>
+                              {p.name}{p.code?" ("+p.code+")":""}
                             </label>);
                           })}
                         </div>
+                        {sel.length>1&&<div style={{marginTop:"8px",fontSize:"11px",color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:"6px",padding:"7px 10px"}}>⚠️ {sel.length} projects selected — this user will have access to all of them.</div>}
                       </div>
-                    )}
+                      );
+                    })()}
                     {/* Permissions */}
                     <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Permissions</div>
                     <div style={{display:"grid",gridTemplateColumns:mobile?"1fr 1fr":"repeat(5,1fr)",gap:"6px"}}>
@@ -1312,15 +1350,16 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           {filtered.length===0&&(<div style={{textAlign:"center",padding:"44px 20px",color:"#9ca3af",fontSize:"14px"}}><i className="ti ti-user-search" style={{fontSize:"28px",display:"block",marginBottom:"8px"}} aria-hidden/>No users match your filters.</div>)}
         </div>
       </Card>
+      )}
 
       {/* User Activity Log */}
-      <Card style={{marginTop:"14px"}}>
-        <button onClick={()=>setShowLog(s=>!s)} style={{width:"100%",display:"flex",alignItems:"center",gap:"9px",border:"none",background:"transparent",cursor:"pointer",padding:0,textAlign:"left"}}>
+      {tab==="logs"&&(
+      <Card>
+        <div style={{display:"flex",alignItems:"center",gap:"9px",marginBottom:"4px"}}>
           <i className="ti ti-history" style={{fontSize:"17px",color:NV}} aria-hidden/>
           <span style={{fontWeight:"800",fontSize:"15px",color:NV,flex:1}}>User Activity Log <span style={{fontWeight:"600",color:"#94a3b8",fontSize:"12px"}}>({userAudit.length})</span></span>
-          <i className={"ti "+(showLog?"ti-chevron-up":"ti-chevron-down")} style={{color:"#94a3b8"}} aria-hidden/>
-        </button>
-        {showLog&&(
+        </div>
+        {(
           <div style={{marginTop:"12px",display:"flex",flexDirection:"column"}}>
             {userAudit.length===0&&<div style={{fontSize:"13px",color:"#9ca3af",padding:"10px 0"}}>No user changes recorded yet. Creations, updates, transfers and deletions will appear here.</div>}
             {userAudit.slice(0,50).map((e,i)=>{
@@ -1339,6 +1378,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
           </div>
         )}
       </Card>
+      )}
 
       {/* Coded delete confirmation */}
       {delUser&&(
@@ -1448,7 +1488,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
               )}
               <div style={{display:"flex",gap:"10px",marginTop:"18px"}}>
                 <button onClick={()=>setShowCreatePreview(false)} style={{flex:1,padding:"11px",borderRadius:"9px",border:"1.5px solid #d1d5db",background:"#fff",color:"#475569",fontWeight:"700",cursor:"pointer",fontSize:"14px"}}>Back to edit</button>
-                <button onClick={()=>{if(newUsr.name.trim()&&newUsr.pin.trim()){const pn=projects.find(p=>p.id===newUsr.assignedProjectId)?.name;logUserAudit("created",newUsr.name.trim(),"Role: "+newUsr.role+(access==="all"?" \u00b7 All projects":pn?" \u00b7 Project: "+pn:""));}addUser();setShowCreatePreview(false);}} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:GN,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Confirm &amp; Create</button>
+                <button onClick={()=>{if(newUsr.name.trim()&&newUsr.pin.trim()){const pn=projects.find(p=>p.id===newUsr.assignedProjectId)?.name;logUserAudit("created",newUsr.name.trim(),"Role: "+newUsr.role+(access==="all"?" \u00b7 All projects":pn?" \u00b7 Project: "+pn:""));}addUser();setShowCreatePreview(false);setTab("view");}} style={{flex:1,padding:"11px",borderRadius:"9px",border:"none",background:GN,color:"#fff",fontWeight:"800",cursor:"pointer",fontSize:"14px"}}>Confirm &amp; Create</button>
               </div>
             </div>
           </div>
@@ -1473,9 +1513,9 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
   // Filter projects by role - use assignedProjectId (single source of truth)
   const visibleProjects=(isAdmin||roleKey(user?.role)==="management"||user?.projectAccess==="all")?projects:projects.filter(p=>{
     if(!user)return false;
-    // Incharge: show project they are assigned to
-    if(roleKey(user.role)==="incharge") return user.assignedProjectId===p.id;
-    return false;
+    // Any specific user (engineer/incharge/custom role) sees every project assigned to them.
+    const mine=[...new Set([user.assignedProjectId,...toArr(user.assignedProjectIds)].filter(Boolean))];
+    return mine.includes(p.id);
   });
 
   function createProject(){
@@ -1555,8 +1595,8 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
       <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":projects.length===1?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:"16px"}}>
         {visibleProjects.map(p=>{
           const isEdit=editId===p.id;
-          const projIncharges=users.filter(u=>roleKey(u.role)==="incharge"&&u.assignedProjectId===p.id);
-          const projEngineers=users.filter(u=>roleKey(u.role)==="engineer"&&u.assignedProjectId===p.id);
+          const projIncharges=users.filter(u=>roleKey(u.role)==="incharge"&&userAssignedTo(u,p.id));
+          const projEngineers=users.filter(u=>roleKey(u.role)==="engineer"&&userAssignedTo(u,p.id));
           return(
             <div key={p.id} style={{background:"#fff",borderRadius:"14px",border:`2px solid ${NV}20`,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
               <div style={{background:`linear-gradient(135deg,${NV},#2d5a9e)`,padding:"20px 20px 16px",color:"#fff"}}>
@@ -1677,12 +1717,11 @@ function AnalyticsScreen({projects,users,mobile,flash}){
   const nEng=roleCount("engineer"),nInc=roleCount("incharge"),nMgmt=roleCount("management"),nAdmin=roleCount("admin");
   const unassigned=users.filter(u=>{
     if(u.projectAccess==="all")return false;
-    if(roleKey(u.role)==="management")return toArr(u.assignedProjectIds).length===0&&!u.assignedProjectId;
     if(roleKey(u.role)==="admin")return false;
-    return !u.assignedProjectId;
+    return userProjectIds(u).length===0;
   });
-  const projIncharges=p=>users.filter(u=>roleKey(u.role)==="incharge"&&u.assignedProjectId===p.id);
-  const projEngineers=p=>users.filter(u=>roleKey(u.role)==="engineer"&&u.assignedProjectId===p.id);
+  const projIncharges=p=>users.filter(u=>roleKey(u.role)==="incharge"&&userAssignedTo(u,p.id));
+  const projEngineers=p=>users.filter(u=>roleKey(u.role)==="engineer"&&userAssignedTo(u,p.id));
 
   const pd=pdata||{};
   const totalDPRs=Object.values(pd).reduce((a,x)=>a+(x.count||0),0);
@@ -2338,11 +2377,13 @@ function App(){
     try{ history.pushState({spl:1},""); }catch(e){}
     const onPop=()=>{
       const st=navRef.current,u=st.user;
+      // Does this user have a project picker as home? (admin / management / all-access / >1 specific project)
+      const pickerHome=!!u&&(roleKey(u.role)==="management"||u.projectAccess==="all"||[...new Set([u.assignedProjectId,...toArr(u.assignedProjectIds)].filter(Boolean))].length>1);
       let atHome=false;
       if(st.activeProject&&st.view!=="dashboard"){ setView("dashboard"); }
       else if(st.activeProject){ // already on the in-project dashboard
-        if(u&&(roleKey(u.role)==="admin"||roleKey(u.role)==="management")){ setActiveProject(null); setView("dashboard"); setAppView(roleKey(u.role)==="admin"?"globalAdmin":"projects"); }
-        else atHome=true; // engineer / incharge: dashboard is home
+        if(u&&(roleKey(u.role)==="admin"||pickerHome)){ setActiveProject(null); setView("dashboard"); setAppView(roleKey(u.role)==="admin"?"globalAdmin":"projects"); }
+        else atHome=true; // single-project engineer / incharge: dashboard is home
       } else {
         const home=(u&&roleKey(u.role)==="admin")?"globalAdmin":"projects";
         if(st.appView!==home){ setAppView(home); }
@@ -2619,6 +2660,9 @@ function App(){
   },[activeProject]);
 
   const caps=user?(user.caps||ROLE_CAPS[roleKey(user.role)]||ROLE_CAPS.engineer):ROLE_CAPS.engineer;
+  // A non-admin/management user who can reach more than one project (All access, or
+  // several specific projects) needs the project picker as their "home", not sign-out.
+  const usesProjectPicker=!!user&&(roleKey(user.role)==="management"||user.projectAccess==="all"||[...new Set([user.assignedProjectId,...toArr(user.assignedProjectIds)].filter(Boolean))].length>1);
   // Cinematic intro overlays the very first paint while auth/data resolve in the background.
   if(!splashDone)return <SplashScreen onDone={()=>setSplashDone(true)}/>;
   if(loading)return <div style={{padding:"5rem",textAlign:"center",color:"#6b7280",fontFamily:"sans-serif",fontSize:"16px"}}>Loading…</div>;
@@ -2838,8 +2882,11 @@ function App(){
     if(role==="admin"){setAppView("globalAdmin");return;}
     // Management, or anyone granted "All projects" access — show the project picker
     if(role==="management"||u.projectAccess==="all"){setAppView("projects");return;}
-    // engineer or incharge with a single assigned project — go straight there
-    const assignedPid=u.assignedProjectId;
+    // A user assigned more than one specific project also gets the picker to choose.
+    const assignedIds=[...new Set([u.assignedProjectId,...toArr(u.assignedProjectIds)].filter(Boolean))];
+    if(assignedIds.length>1){setAppView("projects");return;}
+    // Single assigned project — go straight there
+    const assignedPid=assignedIds[0];
     if(!assignedPid){setAppView("noProject");return;}
     const proj=projects.find(p=>p.id===assignedPid);
     if(!proj){setAppView("noProject");return;}
@@ -3220,10 +3267,10 @@ function App(){
           </div>
           <button onClick={()=>safeNav(()=>{
             if(roleKey(user?.role)==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
-            else if(roleKey(user?.role)==="management"||user?.projectAccess==="all"){setActiveProject(null);setView("dashboard");setAppView("projects");}
+            else if(usesProjectPicker){setActiveProject(null);setView("dashboard");setAppView("projects");}
             else{handleSignOut();} // single-project engineers/incharges: sign out instead of showing wrong screen
           })} style={{margin:"0 12px 10px",padding:"9px 11px",borderRadius:"8px",border:"1px solid rgba(255,255,255,.2)",background:"transparent",cursor:"pointer",color:"rgba(255,255,255,.8)",fontSize:"12px",fontWeight:"700",display:"flex",alignItems:"center",gap:"7px"}}>
-            <i className="ti ti-arrow-left" style={{fontSize:"14px"}} aria-hidden/>{roleKey(user?.role)==="admin"||roleKey(user?.role)==="management"||user?.projectAccess==="all"?"All Projects":"Sign Out"}
+            <i className="ti ti-arrow-left" style={{fontSize:"14px"}} aria-hidden/>{roleKey(user?.role)==="admin"||usesProjectPicker?"All Projects":"Sign Out"}
           </button>
           <div style={{margin:"0 16px 10px",padding:"10px 12px",background:"rgba(255,255,255,.07)",borderRadius:"9px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
@@ -3275,7 +3322,7 @@ function App(){
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             <button onClick={()=>safeNav(()=>{
               if(roleKey(user?.role)==="admin"){setActiveProject(null);setView("dashboard");setAppView("globalAdmin");}
-              else if(roleKey(user?.role)==="management"||user?.projectAccess==="all"){setActiveProject(null);setView("dashboard");setAppView("projects");}
+              else if(usesProjectPicker){setActiveProject(null);setView("dashboard");setAppView("projects");}
               else{handleSignOut();}
             })} style={{padding:"5px 8px",borderRadius:"6px",border:"1px solid rgba(255,255,255,.3)",background:"transparent",cursor:"pointer",color:"rgba(255,255,255,.8)",fontSize:"12px",display:"flex",alignItems:"center",gap:"3px"}}>
               <i className="ti ti-arrow-left" style={{fontSize:"13px"}} aria-hidden/>
@@ -3817,7 +3864,7 @@ function App(){
         <div>
           {/* Engineers from Users who are assigned to this project */}
           {(()=>{
-            const projEngUsers=users.filter(u=>roleKey(u.role)==="engineer"&&u.assignedProjectId===activeProject?.id);
+            const projEngUsers=users.filter(u=>roleKey(u.role)==="engineer"&&userAssignedTo(u,activeProject?.id));
             const noIncharge=projEngUsers.filter(u=>{const er=engineers.find(e=>e.name===u.name);return !er?.incharge;});
             return(
               <>
@@ -3852,7 +3899,7 @@ function App(){
                                     .then(()=>flash("✅ Saved")).catch(e=>flash(e.message,"err"));
                                 }}
                                 onRemove={()=>flash("To remove: go to Users tab and change their project assignment","err")}
-                                inchargeOpts={users.filter(x=>roleKey(x.role)==="incharge"&&x.assignedProjectId===activeProject?.id).map(x=>x.name)}
+                                inchargeOpts={users.filter(x=>roleKey(x.role)==="incharge"&&userAssignedTo(x,activeProject?.id)).map(x=>x.name)}
                                 designationOpts={lists.designations||DESIGNATIONS}
                                 deptOpts={lists.depts||DEPTS}
                               />
