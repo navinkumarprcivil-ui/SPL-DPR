@@ -1004,7 +1004,7 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile,users=[]})
 }
 
 // ─── USERS PANEL ─────────────────────────────────────────────────────────────
-function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser,saveUserCaps,flash,globalLists,user}){
+function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser,saveUserCaps,saveUserFields,flash,globalLists,user}){
   const [editId,setEditId]=useState(null);
   const [editData,setEditData]=useState({});
   const [userAudit,setUserAudit]=useState([]);
@@ -1333,8 +1333,18 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                       {!isEditing&&u.projectAccess==="all"&&<span style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🌐 All projects</span>}
                       {!isEditing&&u.projectAccess!=="all"&&userProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
                       {!isEditing&&u.projectAccess!=="all"&&(roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge")&&hasNoProject&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
-                      {!isEditing&&u.dept&&<span style={{fontSize:"11px",color:"#5b21b6",background:"#ede9fe",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🏗️ {u.dept}</span>}
-                      {!isEditing&&u.designation&&<span style={{fontSize:"11px",color:"#374151",background:"#f3f4f6",padding:"2px 8px",borderRadius:"6px",fontWeight:"600"}}>🏷️ {u.designation}</span>}
+                      {!isEditing&&(
+                        <select value={u.dept||""} title="Set department" onChange={e=>{const v=e.target.value;saveUserFields&&saveUserFields(u.id,{dept:v}).then(()=>flash(v?("🏗️ "+u.name+" → "+v):"Department cleared"));}} style={{fontSize:"11px",fontWeight:"700",color:u.dept?"#5b21b6":"#9ca3af",background:u.dept?"#ede9fe":"#f8fafc",border:`1px solid ${u.dept?"#ddd6fe":"#e5e7eb"}`,borderRadius:"6px",padding:"2px 6px",cursor:"pointer"}}>
+                          <option value="">🏗️ Set dept…</option>
+                          {deptOpts.map(d=><option key={d} value={d}>{d}</option>)}
+                        </select>
+                      )}
+                      {!isEditing&&(
+                        <select value={u.designation||""} title="Set designation" onChange={e=>{const v=e.target.value;saveUserFields&&saveUserFields(u.id,{designation:v}).then(()=>flash(v?("🏷️ "+u.name+" → "+v):"Designation cleared"));}} style={{fontSize:"11px",fontWeight:"600",color:u.designation?"#374151":"#9ca3af",background:u.designation?"#f3f4f6":"#f8fafc",border:"1px solid #e5e7eb",borderRadius:"6px",padding:"2px 6px",cursor:"pointer"}}>
+                          <option value="">🏷️ Set designation…</option>
+                          {desigOpts.map(d=><option key={d} value={d}>{d}</option>)}
+                        </select>
+                      )}
                     </div>
                     {!isEditing&&u.desc&&<div style={{fontSize:"12px",color:"#6b7280",marginTop:"4px"}}>{u.desc}</div>}
                   </div>
@@ -2489,9 +2499,16 @@ function App(){
   const [authReady,setAuthReady]=useState(false);
   const [subs,setSubs]=useState([]);
   const [fbStatus,setFbStatus]=useState('connecting');
-  const [engineers,setEngineers]=useState([]);
+  const [engineersRaw,setEngineersRaw]=useState([]);
   const [workTypes,setWorkTypes]=useState(DEFAULT_WT);
   const [users,setUsers]=useState([]);
+  // Dept & designation are user-level attributes: overlay each engineer's values
+  // from their matching global user so every project view (Manage Engineers,
+  // attendance, dashboard, exports) reflects the user's profile automatically.
+  const engineers=engineersRaw.map(e=>{
+    const u=users.find(x=>x.id===e.id||(x.name||"").trim().toLowerCase()===(e.name||"").trim().toLowerCase());
+    return u?{...e,dept:u.dept||e.dept||"",designation:u.designation||e.designation||""}:e;
+  });
   const [lateRequests,setLateRequests]=useState([]);
   const [auditTrail,setAuditTrail]=useState([]);
   const [user,setUser]=useState(null);
@@ -2808,7 +2825,7 @@ function App(){
 
   // ── PROJECT-SCOPED effect: runs when activeProject changes ───────────────
   useEffect(()=>{
-    if(!activeProject){setSubs([]);setEngineers([]);return;}
+    if(!activeProject){setSubs([]);setEngineersRaw([]);return;}
     const pid=activeProject.id;
     const base='projects/'+pid;
     const _unsubs=[];
@@ -2846,8 +2863,8 @@ function App(){
       try{
         const r=await fetch(await authedUrl(RTDB_URL+'/'+base+'/engineers.json'));
         const obj=await r.json();
-        if(obj){const arr=Object.values(obj);setEngineers(arr);}
-        else setEngineers([]);
+        if(obj){const arr=Object.values(obj);setEngineersRaw(arr);}
+        else setEngineersRaw([]);
       }catch(e){console.error('Engs:',e.message);}
     }
     fetchEngs();
@@ -2855,7 +2872,7 @@ function App(){
     const u2=onValue(engsRef,snap=>{
       const obj=snap.val()||{};
       const arr=Object.values(obj);
-      setEngineers(arr.length>0?arr:[]);
+      setEngineersRaw(arr.length>0?arr:[]);
     },err=>console.error('Engs SDK:',err.code));
     _unsubs.push(()=>{try{u2();}catch(e){}});
 
@@ -3171,6 +3188,7 @@ function App(){
     flash("✅ User created");
   }
   async function saveUserCaps(uid_,caps){rtdbPatch('users/'+uid_,{caps}).then(()=>flash("Permissions updated")).catch(e=>flash("Failed: "+e.message,"err"));}
+  async function saveUserFields(uid_,fields){return rtdbPatch('users/'+uid_,fields).catch(e=>flash("Failed: "+e.message,"err"));}
 
   // ── Performance (stars) + Audit Log + Late-Entry Requests ──────────────────
   function logAudit(entry){
@@ -3465,7 +3483,7 @@ function App(){
             users={users} projects={projects} mobile={mobile}
             newUsr={newUsr} setNewUsr={setNewUsr}
             addUser={addUser} reassignUser={reassignUser}
-            saveUserCaps={saveUserCaps} flash={flash}
+            saveUserCaps={saveUserCaps} saveUserFields={saveUserFields} flash={flash}
             globalLists={globalLists} user={user}
           />
         )}
