@@ -340,18 +340,14 @@ function LabourSection({contractors,onChange,labourTypes}){
 }
 
 // ─── ENGINEER ROW ─────────────────────────────────────────────────────────────
-function EngineerRow({e,onSave,onRemove,inchargeOpts,designationOpts,deptOpts}){
+function EngineerRow({e,onSave,onRemove,inchargeOpts}){
   const [ed,setEd]=useState(false);
   const [ic,setIc]=useState(e.incharge||"");
-  const [des,setDes]=useState(e.designation||"");
-  const [dept,setDept]=useState(e.dept||"");
   const [del,setDel]=useState(false);
   const mobile=useMobile();
   const icOpts=inchargeOpts||INCHARGE_OPTS;
-  const desOpts=designationOpts||DESIGNATIONS;
-  const dpOpts=deptOpts||DEPTS;
   // Sync if parent data changes (e.g. after Firebase update)
-  useEffect(()=>{setIc(e.incharge||"");setDes(e.designation||"");setDept(e.dept||"");},[e.incharge,e.designation,e.dept]);
+  useEffect(()=>{setIc(e.incharge||"");},[e.incharge]);
   return(
     <tr style={{borderBottom:"1px solid #f3f4f6"}}>
       {/* Name — read only, comes from Users tab */}
@@ -361,25 +357,11 @@ function EngineerRow({e,onSave,onRemove,inchargeOpts,designationOpts,deptOpts}){
           <span style={{fontWeight:"700"}}>{e.name}</span>
         </div>
       </td>
-      {/* Dept — always a select in edit, badge in read */}
-      {!mobile&&<td style={{padding:"10px"}}>
-        {ed
-          ?<select value={dept} onChange={e=>setDept(e.target.value)} style={{padding:"7px 8px",borderRadius:"6px",border:"1px solid #d1d5db",fontSize:"12px",background:"#fff",width:"100%"}}>
-              <option value="">— Select —</option>
-              {dpOpts.map(o=><option key={o}>{o}</option>)}
-            </select>
-          :<DeptB dept={e.dept}/>}
-      </td>}
-      {/* Designation */}
-      {!mobile&&<td style={{padding:"10px",color:"#6b7280",fontSize:"12px"}}>
-        {ed
-          ?<select value={des} onChange={e=>setDes(e.target.value)} style={{padding:"7px 8px",borderRadius:"6px",border:"1px solid #d1d5db",fontSize:"12px",background:"#fff",width:"100%"}}>
-              <option value="">— Select —</option>
-              {desOpts.map(o=><option key={o}>{o}</option>)}
-            </select>
-          :<span>{e.designation||"—"}</span>}
-      </td>}
-      {/* Incharge */}
+      {/* Dept — read-only, from the user's profile */}
+      {!mobile&&<td style={{padding:"10px"}}>{e.dept?<DeptB dept={e.dept}/>:<span style={{color:"#9ca3af",fontSize:"12px"}}>—</span>}</td>}
+      {/* Designation — read-only, from the user's profile */}
+      {!mobile&&<td style={{padding:"10px",color:"#6b7280",fontSize:"12px"}}>{e.designation||"—"}</td>}
+      {/* Incharge — editable; any user can be chosen */}
       <td style={{padding:"10px"}}>
         {ed
           ?<select value={ic} onChange={e=>setIc(e.target.value)} style={{padding:"7px 8px",borderRadius:"6px",border:"1px solid #d1d5db",fontSize:"12px",background:"#fff",width:"100%"}}>
@@ -392,8 +374,8 @@ function EngineerRow({e,onSave,onRemove,inchargeOpts,designationOpts,deptOpts}){
       <td style={{padding:"10px"}}>
         {ed?(
           <div style={{display:"flex",gap:"6px"}}>
-            <button onClick={()=>{onSave(e.id,{incharge:ic,designation:des,dept});setEd(false);}} style={{padding:"8px 14px",borderRadius:"6px",border:"none",background:GN,color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>Save</button>
-            <button onClick={()=>{setEd(false);setIc(e.incharge||"");setDes(e.designation||"");setDept(e.dept||"");}} style={{padding:"8px 12px",borderRadius:"6px",border:"1px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:"13px"}}>✕</button>
+            <button onClick={()=>{onSave(e.id,{incharge:ic});setEd(false);}} style={{padding:"8px 14px",borderRadius:"6px",border:"none",background:GN,color:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:"700"}}>Save</button>
+            <button onClick={()=>{setEd(false);setIc(e.incharge||"");}} style={{padding:"8px 12px",borderRadius:"6px",border:"1px solid #d1d5db",background:"#fff",cursor:"pointer",fontSize:"13px"}}>✕</button>
           </div>
         ):(
           <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
@@ -719,7 +701,11 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile,users=[]})
   const [edits,setEdits]=useState({});
   const [newRole,setNewRole]=useState("");
   const [delRole,setDelRole]=useState(null); // role pending delete confirmation
+  const [newDept,setNewDept]=useState("");
+  const [newDesig,setNewDesig]=useState("");
   const roles=globalLists.roles&&globalLists.roles.length?globalLists.roles:Object.keys(ROLE_CAPS);
+  const depts=globalLists.depts&&globalLists.depts.length?globalLists.depts:DEPTS;
+  const designations=globalLists.designations&&globalLists.designations.length?globalLists.designations:DESIGNATIONS;
   const lockVal=edits.dateLockDays!==undefined?edits.dateLockDays:String(globalLists.dateLockDays??2);
   const starStartVal=edits.starStart!==undefined?edits.starStart:String(globalLists.starStart??5);
   const lateEngVal=edits.lateEngDeduct!==undefined?edits.lateEngDeduct:String(globalLists.lateEngDeduct??0.5);
@@ -789,6 +775,30 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile,users=[]})
     setDelRole(null);
   }
   const roleUserCount=name=>users.filter(u=>roleKey(u.role)===roleKey(name)).length;
+
+  // Generic global-list persistence (departments, designations) used for user profiles.
+  function persistGlobalList(key,next,okMsg){
+    rtdbPut('config/globalLists',{...globalLists,[key]:next})
+      .then(()=>{setGlobalLists(p=>({...p,[key]:next}));flash(okMsg);})
+      .catch(e=>flash("Failed: "+e.message,"err"));
+  }
+  function addDept(){
+    const n=newDept.trim();if(!n){flash("Enter a department","err");return;}
+    if(depts.some(d=>d.toLowerCase()===n.toLowerCase())){flash("That department already exists","err");return;}
+    persistGlobalList("depts",[...depts,n],"✅ Department \""+n+"\" added");setNewDept("");
+  }
+  function removeDept(d){
+    const inUse=users.filter(u=>u.dept===d).length;
+    persistGlobalList("depts",depts.filter(x=>x!==d),"🗑 Department \""+d+"\" removed"+(inUse?" ("+inUse+" user"+(inUse===1?"":"s")+" keep it)":""));
+  }
+  function addDesig(){
+    const n=newDesig.trim();if(!n){flash("Enter a designation","err");return;}
+    if(designations.some(d=>d.toLowerCase()===n.toLowerCase())){flash("That designation already exists","err");return;}
+    persistGlobalList("designations",[...designations,n],"✅ Designation \""+n+"\" added");setNewDesig("");
+  }
+  function removeDesig(d){
+    persistGlobalList("designations",designations.filter(x=>x!==d),"🗑 Designation \""+d+"\" removed");
+  }
 
   function saveWindowsAndStars(){
     const apv=parseInt(apvVal), lock=parseInt(lockVal);
@@ -918,6 +928,58 @@ function GlobalSettingsPanel({globalLists,setGlobalLists,flash,mobile,users=[]})
         </div>
       </Card>
 
+      {/* Departments */}
+      <Card>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
+          <div style={{fontWeight:"700",fontSize:"15px",color:NV}}>🏗️ Departments</div>
+          <span style={{fontSize:"12px",color:"#9ca3af"}}>{depts.length} dept{depts.length===1?"":"s"}</span>
+        </div>
+        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>These appear in the Department dropdown when creating or editing users. Each user's department flows through to Manage Engineers, attendance and reports.</p>
+        <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
+          <Inp value={newDept} onChange={e=>setNewDept(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addDept();}} placeholder="New department — e.g. QA / QC"/>
+          <button onClick={addDept} style={{flexShrink:0,padding:"11px 18px",borderRadius:"8px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",display:"flex",alignItems:"center",gap:"6px"}}><i className="ti ti-plus" aria-hidden/>Add</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:"7px"}}>
+          {depts.map(d=>{
+            const inUse=users.filter(u=>u.dept===d).length;
+            return(
+              <div key={d} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"9px",border:"1px solid #e5e7eb",background:"#f9fafb"}}>
+                <span style={{fontWeight:"700",fontSize:"14px",color:"#111827"}}>{d}</span>
+                {inUse>0&&<span style={{fontSize:"11px",color:"#6b7280"}}>{inUse} user{inUse===1?"":"s"}</span>}
+                <button onClick={()=>removeDept(d)} title={"Remove "+d} style={{marginLeft:"auto",flexShrink:0,width:"32px",height:"32px",borderRadius:"8px",border:"1px solid #fca5a5",background:"#fef2f2",color:RD,cursor:"pointer",fontSize:"14px"}}><i className="ti ti-trash" aria-hidden/></button>
+              </div>
+            );
+          })}
+          {depts.length===0&&<div style={{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"14px 0"}}>No departments yet — add one above.</div>}
+        </div>
+      </Card>
+
+      {/* Designations */}
+      <Card>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
+          <div style={{fontWeight:"700",fontSize:"15px",color:NV}}>🏷️ Designations</div>
+          <span style={{fontSize:"12px",color:"#9ca3af"}}>{designations.length}</span>
+        </div>
+        <p style={{fontSize:"13px",color:"#6b7280",marginBottom:"12px",marginTop:0}}>These appear in the Designation dropdown when creating or editing users, and flow through to Manage Engineers.</p>
+        <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
+          <Inp value={newDesig} onChange={e=>setNewDesig(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addDesig();}} placeholder="New designation — e.g. Planning Engineer"/>
+          <button onClick={addDesig} style={{flexShrink:0,padding:"11px 18px",borderRadius:"8px",border:"none",background:NV,color:"#fff",cursor:"pointer",fontSize:"14px",fontWeight:"800",display:"flex",alignItems:"center",gap:"6px"}}><i className="ti ti-plus" aria-hidden/>Add</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:"7px"}}>
+          {designations.map(d=>{
+            const inUse=users.filter(u=>u.designation===d).length;
+            return(
+              <div key={d} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",borderRadius:"9px",border:"1px solid #e5e7eb",background:"#f9fafb"}}>
+                <span style={{fontWeight:"700",fontSize:"14px",color:"#111827"}}>{d}</span>
+                {inUse>0&&<span style={{fontSize:"11px",color:"#6b7280"}}>{inUse} user{inUse===1?"":"s"}</span>}
+                <button onClick={()=>removeDesig(d)} title={"Remove "+d} style={{marginLeft:"auto",flexShrink:0,width:"32px",height:"32px",borderRadius:"8px",border:"1px solid #fca5a5",background:"#fef2f2",color:RD,cursor:"pointer",fontSize:"14px"}}><i className="ti ti-trash" aria-hidden/></button>
+              </div>
+            );
+          })}
+          {designations.length===0&&<div style={{fontSize:"13px",color:"#9ca3af",textAlign:"center",padding:"14px 0"}}>No designations yet — add one above.</div>}
+        </div>
+      </Card>
+
       {/* Delete-role confirmation */}
       {delRole&&(()=>{const inUse=roleUserCount(delRole);return(
         <div onClick={()=>setDelRole(null)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",zIndex:2000}}>
@@ -969,6 +1031,8 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
   const [previewTab,setPreviewTab]=useState("card");
   const [editDiff,setEditDiff]=useState(null);
   const roleOpts=globalLists?.roles||Object.keys(ROLE_CAPS);
+  const deptOpts=globalLists?.depts&&globalLists.depts.length?globalLists.depts:DEPTS;
+  const desigOpts=globalLists?.designations&&globalLists.designations.length?globalLists.designations:DESIGNATIONS;
   const PERMS=[["fill","✏️ Fill DPR"],["approve","✅ Approve"],["download","📥 Download"],["manage","👷 Manage Engineers"],["settings","⚙️ Edit Lists"]];
   const SH2={fontSize:"12px",fontWeight:"700",color:"#6b7280",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"14px",paddingBottom:"10px",borderBottom:"1px solid #f3f4f6",display:"flex",alignItems:"center",justifyContent:"space-between"};
 
@@ -1005,7 +1069,7 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     w.document.close();
   }
 
-  function startEdit(u){setEditId(u.id);setEditData({name:u.name,role:u.role,pin:"",desc:u.desc||"",projectAccess:u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none"),assignedProjectId:u.assignedProjectId||"",assignedProjectIds:u.assignedProjectIds||[],caps:u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer});}
+  function startEdit(u){setEditId(u.id);setEditData({name:u.name,role:u.role,pin:"",desc:u.desc||"",dept:u.dept||"",designation:u.designation||"",projectAccess:u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none"),assignedProjectId:u.assignedProjectId||"",assignedProjectIds:u.assignedProjectIds||[],caps:u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer});}
 
   function saveEdit(u){
     const updated={...editData};
@@ -1016,6 +1080,8 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
     if(updated.name!==undefined&&updated.name!==u.name)changes.push({f:"Name",from:u.name,to:updated.name});
     if(updated.role!==undefined&&updated.role!==u.role)changes.push({f:"Role",from:u.role,to:updated.role});
     if(updated.desc!==undefined&&updated.desc!==(u.desc||""))changes.push({f:"Description",from:u.desc||"—",to:updated.desc||"—"});
+    if(updated.dept!==undefined&&updated.dept!==(u.dept||""))changes.push({f:"Department",from:u.dept||"—",to:updated.dept||"—"});
+    if(updated.designation!==undefined&&updated.designation!==(u.designation||""))changes.push({f:"Designation",from:u.designation||"—",to:updated.designation||"—"});
     if(updated.projectAccess!==undefined&&updated.projectAccess!==(u.projectAccess||(u.assignedProjectId||toArr(u.assignedProjectIds).length?"specific":"none")))changes.push({f:"Project access",from:u.projectAccess==="all"?"All projects":(u.assignedProjectId||toArr(u.assignedProjectIds).length?"Specific":"None"),to:updated.projectAccess==="all"?"All projects":updated.projectAccess==="specific"?"Specific":"None"});
     if(updated.pin)changes.push({f:"PIN",from:"\u2022\u2022\u2022\u2022",to:"new PIN set"});
     if(updated.phone!==undefined&&updated.phone!==(u.phone||""))changes.push({f:"WhatsApp",from:u.phone||"\u2014",to:updated.phone||"\u2014"});
@@ -1123,6 +1189,18 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
             </select>
           </F>
           <F lbl="PIN (4+ digits)"><Inp type="password" value={newUsr.pin} onChange={e=>setNewUsr(p=>({...p,pin:e.target.value}))} placeholder="Set a PIN"/></F>
+          <F lbl="Department">
+            <select value={newUsr.dept||""} onChange={e=>setNewUsr(p=>({...p,dept:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",background:"#fff"}}>
+              <option value="">— Select department —</option>
+              {deptOpts.map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+          </F>
+          <F lbl="Designation">
+            <select value={newUsr.designation||""} onChange={e=>setNewUsr(p=>({...p,designation:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"8px",border:"1.5px solid #d1d5db",fontSize:"15px",background:"#fff"}}>
+              <option value="">— Select designation —</option>
+              {desigOpts.map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+          </F>
           {roleKey(newUsr.role)==="incharge"&&(
             <F lbl="WhatsApp Number (for notifications)"><Inp type="tel" value={newUsr.phone||""} onChange={e=>setNewUsr(p=>({...p,phone:e.target.value}))} placeholder="e.g. 919876543210 (with country code)"/></F>
           )}
@@ -1255,6 +1333,8 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                       {!isEditing&&u.projectAccess==="all"&&<span style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🌐 All projects</span>}
                       {!isEditing&&u.projectAccess!=="all"&&userProjs.map(p=><span key={p.id} style={{fontSize:"11px",color:"#166534",background:"#f0fdf4",padding:"2px 8px",borderRadius:"6px"}}>📍 {p.name}</span>)}
                       {!isEditing&&u.projectAccess!=="all"&&(roleKey(u.role)==="engineer"||roleKey(u.role)==="incharge")&&hasNoProject&&<span style={{fontSize:"11px",color:"#d97706",background:"#fffbeb",padding:"2px 8px",borderRadius:"6px"}}>⚠ No project</span>}
+                      {!isEditing&&u.dept&&<span style={{fontSize:"11px",color:"#5b21b6",background:"#ede9fe",padding:"2px 8px",borderRadius:"6px",fontWeight:"700"}}>🏗️ {u.dept}</span>}
+                      {!isEditing&&u.designation&&<span style={{fontSize:"11px",color:"#374151",background:"#f3f4f6",padding:"2px 8px",borderRadius:"6px",fontWeight:"600"}}>🏷️ {u.designation}</span>}
                     </div>
                     {!isEditing&&u.desc&&<div style={{fontSize:"12px",color:"#6b7280",marginTop:"4px"}}>{u.desc}</div>}
                   </div>
@@ -1278,6 +1358,23 @@ function UsersPanel({users,projects,mobile,newUsr,setNewUsr,addUser,reassignUser
                     <div style={{marginBottom:"12px"}}>
                       <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Description</div>
                       <Inp value={ed.desc!==undefined?ed.desc:u.desc||""} onChange={e=>setEditData(p=>({...p,desc:e.target.value}))} placeholder="Role context, division, notes about this user…"/>
+                    </div>
+                    {/* Department & Designation */}
+                    <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
+                      <div>
+                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Department</div>
+                        <select value={ed.dept!==undefined?ed.dept:u.dept||""} onChange={e=>setEditData(p=>({...p,dept:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:"7px",border:"1.5px solid #d1d5db",fontSize:"13px",background:"#fff"}}>
+                          <option value="">— Select —</option>
+                          {deptOpts.map(d=><option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{fontSize:"12px",fontWeight:"700",color:"#374151",marginBottom:"6px"}}>Designation</div>
+                        <select value={ed.designation!==undefined?ed.designation:u.designation||""} onChange={e=>setEditData(p=>({...p,designation:e.target.value}))} style={{width:"100%",boxSizing:"border-box",padding:"9px 10px",borderRadius:"7px",border:"1.5px solid #d1d5db",fontSize:"13px",background:"#fff"}}>
+                          <option value="">— Select —</option>
+                          {desigOpts.map(d=><option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
                     </div>
                     {/* Project access mode */}
                     <div style={{marginBottom:"12px"}}>
@@ -2445,6 +2542,8 @@ function App(){
   });
   const [globalLists,setGlobalLists]=useState({
     roles:Object.keys(ROLE_CAPS),
+    depts:DEPTS,
+    designations:DESIGNATIONS,
     dateLockDays:2,
     starStart:5,
     lateEngDeduct:0.5,
@@ -2675,6 +2774,8 @@ function App(){
       setGlobalLists(prev=>({
         ...prev,
         ...(dt.roles&&{roles:dt.roles}),
+        ...(dt.depts&&{depts:dt.depts}),
+        ...(dt.designations&&{designations:dt.designations}),
         ...(dt.dateLockDays!=null&&{dateLockDays:Number(dt.dateLockDays)}),
         ...(dt.starStart!=null&&{starStart:Number(dt.starStart)}),
         ...(dt.lateEngDeduct!=null&&{lateEngDeduct:Number(dt.lateEngDeduct)}),
@@ -2995,7 +3096,9 @@ function App(){
     });
   }
 
-  function canApprove(s){if(!user)return false;if(roleKey(user.role)==="admin"||roleKey(user.role)==="management")return true;if(roleKey(user.role)==="incharge"){const e=engineers.find(x=>x.name===s.engineer);return e&&e.incharge===user.name;}return false;}
+  // Incharge is an assignment, not a role: whoever is set as an engineer's incharge
+  // (regardless of their role) can approve that engineer's DPRs. Admin/management approve all.
+  function canApprove(s){if(!user)return false;if(roleKey(user.role)==="admin"||roleKey(user.role)==="management")return true;const e=engineers.find(x=>x.name===s.engineer);return !!(e&&e.incharge&&e.incharge===user.name);}
 
   // Reassign user to a new project — single source of truth: user.assignedProjectId
   function reassignUser(u,newPid){
@@ -4014,25 +4117,28 @@ function App(){
                   <Card>
                     <div style={SH}>
                       <span>Project Engineers ({projEngUsers.length})</span>
-                      <span style={{fontSize:"11px",color:"#9ca3af",fontWeight:"400",textTransform:"none"}}>Names come from Users tab. Set incharge &amp; designation below.</span>
+                      <span style={{fontSize:"11px",color:"#9ca3af",fontWeight:"400",textTransform:"none"}}>Name, department &amp; designation come from the user's profile. Set each engineer's incharge below.</span>
                     </div>
                     <div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:"13px"}}>
                         <thead><tr style={{background:"#f8fafc"}}>{(mobile?["Name","Incharge","Actions"]:["Name","Dept","Designation","Incharge","Actions"]).map(h=><th key={h} style={{padding:"10px",textAlign:"left",fontWeight:"700",color:"#6b7280",fontSize:"11px",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
                         <tbody>
                           {projEngUsers.map(u=>{
-                            // Use user.id as stable key for their engineer record
+                            // Use user.id as stable key for their engineer record.
+                            // Dept & designation always come from the user's profile, not this record.
                             const er=engineers.find(e=>e.name===u.name)||{id:u.id,name:u.name,incharge:"",designation:"",dept:""};
+                            const dept=u.dept||er.dept||"";
+                            const designation=u.designation||er.designation||"";
+                            // Any user (regardless of role) can be picked as an incharge.
+                            const icOpts=[...new Set(users.filter(x=>x.id!==u.id&&x.name).map(x=>x.name))].sort((a,b)=>a.localeCompare(b));
                             return(
-                              <EngineerRow key={u.id} e={{...er,id:u.id}}
+                              <EngineerRow key={u.id} e={{...er,id:u.id,dept,designation}}
                                 onSave={(id,data)=>{
-                                  rtdbPut(pb()+'/engineers/'+u.id,{...er,...data,id:u.id,name:u.name})
+                                  rtdbPut(pb()+'/engineers/'+u.id,{...er,incharge:data.incharge,dept,designation,id:u.id,name:u.name})
                                     .then(()=>flash("✅ Saved")).catch(e=>flash(e.message,"err"));
                                 }}
                                 onRemove={()=>flash("To remove: go to Users tab and change their project assignment","err")}
-                                inchargeOpts={users.filter(x=>roleKey(x.role)==="incharge"&&userAssignedTo(x,activeProject?.id)).map(x=>x.name)}
-                                designationOpts={lists.designations||DESIGNATIONS}
-                                deptOpts={lists.depts||DEPTS}
+                                inchargeOpts={icOpts}
                               />
                             );
                           })}
