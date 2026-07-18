@@ -1686,7 +1686,9 @@ function ProjectsScreen({projects,user,users,onEnter,flash,allSubs,globalLists})
 // ─── ANALYTICS SCREEN (admin) ────────────────────────────────────────────────
 function AnalyticsScreen({projects,users,mobile,flash}){
   const [pdata,setPdata]=useState(null); // {[projectId]: {count,pending,lastDate,byEng:{},byDate:{}}}
+  const [rawSubs,setRawSubs]=useState([]); // flat, project-tagged submissions (for attendance)
   const [loading,setLoading]=useState(true);
+  const [attDate,setAttDate]=useState(()=>new Date().toISOString().slice(0,10));
 
   async function load(){
     setLoading(true);
@@ -1696,17 +1698,18 @@ function AnalyticsScreen({projects,users,mobile,flash}){
           const r=await fetch(await authedUrl(RTDB_URL+'/projects/'+p.id+'/submissions.json'));
           if(!r.ok) throw new Error('HTTP '+r.status);
           const obj=await r.json()||{};
-          const subs=Object.values(obj).filter(Boolean);
+          const subs=Object.values(obj).filter(Boolean).map(s=>({...s,_projectId:p.id,_projectName:p.name}));
           const byEng={},byDate={};let pending=0,lastDate="";
           subs.forEach(s=>{
             const eng=s.engineer||"—";byEng[eng]=(byEng[eng]||0)+1;
             if(s.date){byDate[s.date]=(byDate[s.date]||0)+1;if(s.date>lastDate)lastDate=s.date;}
             if(!s.approved)pending++;
           });
-          return [p.id,{count:subs.length,pending,lastDate,byEng,byDate}];
-        }catch(e){ return [p.id,{count:0,pending:0,lastDate:"",byEng:{},byDate:{},error:true}]; }
+          return [p.id,{count:subs.length,pending,lastDate,byEng,byDate},subs];
+        }catch(e){ return [p.id,{count:0,pending:0,lastDate:"",byEng:{},byDate:{},error:true},[]]; }
       }));
-      setPdata(Object.fromEntries(entries));
+      setPdata(Object.fromEntries(entries.map(([id,d])=>[id,d])));
+      setRawSubs(entries.flatMap(([,,subs])=>subs));
     }catch(e){ flash&&flash("Couldn't load analytics: "+e.message,"err"); }
     setLoading(false);
   }
@@ -1760,6 +1763,34 @@ function AnalyticsScreen({projects,users,mobile,flash}){
 
   const roleBars=[["Engineers",nEng,"#16a34a"],["Incharges",nInc,"#2563eb"],["Management",nMgmt,"#7c3aed"],["Admin",nAdmin,"#d97706"]];
   const roleMax=Math.max(1,nEng,nInc,nMgmt,nAdmin);
+
+  // ── Attendance (activity-based, derived from DPR entries) ──
+  // A person is Present on a given date if they FILLED a DPR dated that day, or
+  // CHECKED (approved) a DPR on that day. Mirrors the Performance screen: the pool
+  // is everyone who can fill or approve (or has), regardless of role. Admins excluded.
+  const checkedBy=(s,name)=>s.approved&&(s.approvedBy===name||(!s.approvedBy&&s.incharge===name));
+  const checkDate=s=>((s.approvedAt||"").slice(0,10))||s.date;
+  const attRows=users.filter(u=>{
+    const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
+    const filledAny=rawSubs.some(s=>s.engineer===u.name);
+    const checkedAny=rawSubs.some(s=>checkedBy(s,u.name));
+    return roleKey(u.role)!=="admin"&&(uc.fill||uc.approve||filledAny||checkedAny);
+  }).map(u=>{
+    const uc=u.caps||ROLE_CAPS[roleKey(u.role)]||ROLE_CAPS.engineer;
+    const filled=rawSubs.filter(s=>s.engineer===u.name&&s.date===attDate);
+    const checked=rawSubs.filter(s=>checkedBy(s,u.name)&&checkDate(s)===attDate);
+    const present=filled.length>0||checked.length>0;
+    return{
+      id:u.id, name:u.name, role:u.role, present,
+      canFill:uc.fill||rawSubs.some(s=>s.engineer===u.name),
+      canCheck:uc.approve||rawSubs.some(s=>checkedBy(s,u.name)),
+      filled:filled.length, checked:checked.length,
+      projs:[...new Set([...filled,...checked].map(s=>s._projectName).filter(Boolean))],
+    };
+  }).sort((a,b)=>(b.present-a.present)||((b.filled+b.checked)-(a.filled+a.checked))||a.name.localeCompare(b.name));
+  const attPresent=attRows.filter(r=>r.present).length;
+  const shiftAttDate=n=>setAttDate(d=>new Date(new Date(d+"T12:00:00").getTime()+n*86400000).toISOString().slice(0,10));
+  const attIsToday=attDate===new Date().toISOString().slice(0,10);
 
   const SH={fontWeight:"800",fontSize:"14px",color:NV,marginBottom:"14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px"};
 
@@ -1827,6 +1858,71 @@ function AnalyticsScreen({projects,users,mobile,flash}){
           </div>
         </Card>
       </div>
+
+      {/* Attendance — derived from DPR entries (fillers + checkers) */}
+      <Card style={{marginBottom:"18px"}}>
+        <div style={{...SH,flexWrap:"wrap"}}>
+          <span>🗓️ Attendance</span>
+          <div style={{display:"flex",alignItems:"center",gap:"7px",flexWrap:"wrap"}}>
+            <button onClick={()=>shiftAttDate(-1)} title="Previous day" style={{width:"30px",height:"30px",borderRadius:"8px",border:"1px solid #d1d5db",background:"#fff",cursor:"pointer",fontWeight:"800",color:NV}}>‹</button>
+            <input type="date" value={attDate} max={new Date().toISOString().slice(0,10)} onChange={e=>e.target.value&&setAttDate(e.target.value)} style={{padding:"7px 10px",borderRadius:"8px",border:"1px solid #d1d5db",fontSize:"13px",fontWeight:"700",color:NV}}/>
+            <button onClick={()=>shiftAttDate(1)} disabled={attIsToday} title="Next day" style={{width:"30px",height:"30px",borderRadius:"8px",border:"1px solid #d1d5db",background:"#fff",cursor:attIsToday?"default":"pointer",opacity:attIsToday?.4:1,fontWeight:"800",color:NV}}>›</button>
+          </div>
+        </div>
+        <div style={{fontSize:"12px",color:"#6b7280",marginTop:"-8px",marginBottom:"12px"}}>
+          Present = filled or checked at least one DPR on {new Date(attDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"})}. Covers everyone who fills DPRs and everyone who checks (approves) them.
+        </div>
+        {!loading&&attRows.length>0&&(
+          <div style={{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"14px"}}>
+            <div style={{flex:"1 1 120px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"10px",padding:"10px 14px"}}>
+              <div style={{fontSize:"10px",fontWeight:"800",color:"#166534",textTransform:"uppercase",letterSpacing:".04em"}}>Present</div>
+              <div style={{fontSize:"22px",fontWeight:"800",color:"#15803d"}}>{attPresent}</div>
+            </div>
+            <div style={{flex:"1 1 120px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:"10px",padding:"10px 14px"}}>
+              <div style={{fontSize:"10px",fontWeight:"800",color:"#991b1b",textTransform:"uppercase",letterSpacing:".04em"}}>Absent</div>
+              <div style={{fontSize:"22px",fontWeight:"800",color:RD}}>{attRows.length-attPresent}</div>
+            </div>
+            <div style={{flex:"1 1 120px",background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:"10px",padding:"10px 14px"}}>
+              <div style={{fontSize:"10px",fontWeight:"800",color:"#475569",textTransform:"uppercase",letterSpacing:".04em"}}>Roster</div>
+              <div style={{fontSize:"22px",fontWeight:"800",color:NV}}>{attRows.length}</div>
+            </div>
+          </div>
+        )}
+        {loading?<div style={{fontSize:"13px",color:"#9ca3af",padding:"14px 0"}}>Loading DPR activity…</div>:
+          attRows.length===0?<div style={{fontSize:"13px",color:"#9ca3af",padding:"14px 0"}}>No one with DPR fill/check activity yet.</div>:
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:mobile?"13px":"12px",minWidth:mobile?"0":"560px"}}>
+              <thead><tr style={{background:"#f8fafc"}}>{(mobile?["Name","Status","Filled","Checked"]:["Name","Role","Status","Filled","Checked","Projects"]).map(h=>(
+                <th key={h} style={{padding:"9px 10px",textAlign:h==="Name"||h==="Role"||h==="Projects"?"left":"center",fontWeight:"800",color:"#6b7280",fontSize:"10px",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap"}}>{h}</th>
+              ))}</tr></thead>
+              <tbody>
+                {attRows.map(r=>(
+                  <tr key={r.id} style={{borderBottom:"1px solid #f3f4f6",background:r.present?"transparent":"#fdfdfd"}}>
+                    <td style={{padding:"9px 10px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                        <Av name={r.name} sz={mobile?30:26}/>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontWeight:"700",color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                          <div style={{display:"flex",gap:"4px",marginTop:"2px"}}>
+                            {r.canFill&&<span style={{fontSize:"9px",fontWeight:"800",color:"#1d4ed8",background:"#eff6ff",borderRadius:"20px",padding:"1px 6px"}}>Fills</span>}
+                            {r.canCheck&&<span style={{fontSize:"9px",fontWeight:"800",color:"#166534",background:"#f0fdf4",borderRadius:"20px",padding:"1px 6px"}}>Checks</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    {!mobile&&<td style={{padding:"9px 10px"}}><RoleB role={r.role}/></td>}
+                    <td style={{padding:"9px 10px",textAlign:"center"}}>
+                      <span style={{fontSize:"11px",fontWeight:"800",padding:"4px 10px",borderRadius:"8px",whiteSpace:"nowrap",color:r.present?"#15803d":RD,background:r.present?"#f0fdf4":"#fef2f2"}}>{r.present?"✅ Present":"✗ Absent"}</span>
+                    </td>
+                    <td style={{padding:"9px 10px",textAlign:"center",fontWeight:"800",color:r.filled>0?"#1d4ed8":"#cbd5e1"}}>{r.filled||"—"}</td>
+                    <td style={{padding:"9px 10px",textAlign:"center",fontWeight:"800",color:r.checked>0?"#166534":"#cbd5e1"}}>{r.checked||"—"}</td>
+                    {!mobile&&<td style={{padding:"9px 10px",color:"#6b7280",fontSize:"11px"}}>{r.projs.length?r.projs.join(", "):"—"}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>}
+      </Card>
 
       <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1.4fr 1fr",gap:"14px"}}>
         {/* Per-project table */}
